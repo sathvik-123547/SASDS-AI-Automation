@@ -12,45 +12,7 @@ testing, self-correction, and deployment — using a single intelligent agent.
 - Versioning: GitHub API
 
 ## Project Structure
-SASDS-AI-Automation/
-│
-├── backend/
-│   ├── app/
-│   │   ├── main.py
-│   │   ├── routers/
-│   │   ├── services/
-│   │   └── utils/
-│   ├── tests/
-│   ├── requirements.txt
-│   └── README.md
-│
-├── frontend/
-│   ├── src/
-│   ├── public/
-│   ├── package.json
-│   └── README.md
-│
-├── models/
-│   ├── prompts/
-│   ├── templates/
-│   └── json_schemas/
-│
-├── docs/
-│   ├── architecture/
-│   ├── api_docs/
-│   └── workflow_diagrams/
-│
-├── scripts/
-│   └── utilities/
-│
-├── .github/
-│   └── workflows/
-│       └── ci.yml
-│
-├── .gitignore
-├── README.md
-└── LICENSE
-
+<img width="440" height="854" alt="image" src="https://github.com/user-attachments/assets/882dff28-1e38-4e54-90cb-4302adbc7185" />
 
 ## Branch Strategy
 - main: production
