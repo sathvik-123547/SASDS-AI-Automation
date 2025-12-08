@@ -1,5 +1,8 @@
 from fastapi import FastAPI
 from app.routers.base import router as base_router
+from app.routers.requirements import router as requirements_router
+from app.routers.codegen import router as codegen_router 
+from app.routers.code_writer import router as code_writer_router
 
 app = FastAPI(
     title="SASDS Backend",
@@ -11,5 +14,9 @@ app = FastAPI(
 def ping():
     return {"message": "Backend is running successfully!"}
 
-# include routers
+# Include routers
 app.include_router(base_router)
+app.include_router(requirements_router)
+app.include_router(codegen_router)
+app.include_router(code_writer_router)
+
