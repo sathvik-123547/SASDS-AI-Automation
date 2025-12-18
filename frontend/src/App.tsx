@@ -22,12 +22,31 @@ import {
 
 type LoadState = "idle" | "loading" | "error" | "success";
 
-function Section(props: { title: string; children: ReactNode }) {
+function StepBadge({ step }: { step: number }) {
+  return <span className="step-badge">Step {step}</span>;
+}
+
+function Section(props: {
+  id?: string;
+  step: number;
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
   return (
-    <section className="card">
+    <section className="card" id={props.id}>
       <header className="card__header">
-        <h2>{props.title}</h2>
+        <div className="card__title-wrap">
+          <StepBadge step={props.step} />
+          <div>
+            <p className="eyebrow small">workflow</p>
+            <h2>{props.title}</h2>
+          </div>
+        </div>
       </header>
+      {props.description ? (
+        <p className="card__description">{props.description}</p>
+      ) : null}
       <div className="card__body">{props.children}</div>
     </section>
   );
@@ -35,9 +54,7 @@ function Section(props: { title: string; children: ReactNode }) {
 
 function JsonBlock<T>({ data }: { data: T | undefined }) {
   if (!data) return null;
-  return (
-    <pre className="json-block">{JSON.stringify(data, null, 2)}</pre>
-  );
+  return <pre className="json-block">{JSON.stringify(data, null, 2)}</pre>;
 }
 
 export default function App() {
@@ -47,8 +64,7 @@ export default function App() {
     "Build a simple task manager API with projects and tasks."
   );
 
-  const [analysisResult, setAnalysisResult] =
-    useState<RequirementAnalysisResponse>();
+  const [analysisResult, setAnalysisResult] = useState<RequirementAnalysisResponse>();
   const [analysisState, setAnalysisState] = useState<LoadState>("idle");
   const [analysisError, setAnalysisError] = useState<string>("");
 
@@ -63,6 +79,8 @@ export default function App() {
   const [writeState, setWriteState] = useState<LoadState>("idle");
   const [writeMessage, setWriteMessage] = useState<string>("");
   const [writeError, setWriteError] = useState<string>("");
+  const [lastProjectId, setLastProjectId] = useState<string>("");
+  const [lastProjectPath, setLastProjectPath] = useState<string>("");
 
   const [reviewState, setReviewState] = useState<LoadState>("idle");
   const [reviewError, setReviewError] = useState<string>("");
@@ -129,9 +147,7 @@ export default function App() {
       setCodeState("success");
     } catch (err) {
       setCodeState("error");
-      setCodeError(
-        err instanceof Error ? err.message : "Failed to generate code."
-      );
+      setCodeError(err instanceof Error ? err.message : "Failed to generate code.");
     }
   }
 
@@ -145,9 +161,7 @@ export default function App() {
       setTestsState("success");
     } catch (err) {
       setTestsState("error");
-      setTestsError(
-        err instanceof Error ? err.message : "Failed to generate tests."
-      );
+      setTestsError(err instanceof Error ? err.message : "Failed to generate tests.");
     }
   }
 
@@ -160,12 +174,12 @@ export default function App() {
       setWriteMessage(
         `Project saved at ${response.project_path} (id: ${response.project_id})`
       );
+      setLastProjectId(response.project_id);
+      setLastProjectPath(response.project_path);
       setWriteState("success");
     } catch (err) {
       setWriteState("error");
-      setWriteError(
-        err instanceof Error ? err.message : "Failed to write code to disk."
-      );
+      setWriteError(err instanceof Error ? err.message : "Failed to write code to disk.");
     }
   }
 
@@ -224,9 +238,7 @@ export default function App() {
       setSelfFixState("success");
     } catch (err) {
       setSelfFixState("error");
-      setSelfFixError(
-        err instanceof Error ? err.message : "Self-correction failed."
-      );
+      setSelfFixError(err instanceof Error ? err.message : "Self-correction failed.");
     }
   }
 
@@ -239,9 +251,7 @@ export default function App() {
       setProjectsState("success");
     } catch (err) {
       setProjectsState("error");
-      setProjectsError(
-        err instanceof Error ? err.message : "Failed to load projects."
-      );
+      setProjectsError(err instanceof Error ? err.message : "Failed to load projects.");
     }
   }
 
@@ -254,218 +264,338 @@ export default function App() {
       setRunsState("success");
     } catch (err) {
       setRunsState("error");
-      setRunsError(
-        err instanceof Error ? err.message : "Failed to load runs."
-      );
+      setRunsError(err instanceof Error ? err.message : "Failed to load runs.");
     }
   }
 
   return (
     <div className="page">
-      <header className="page__header">
-        <div>
-          <p className="eyebrow">SASDS</p>
-          <h1>Single Agent Software Development System</h1>
-          <p className="subtitle">
-            Interact with the backend to analyze requirements, generate code and tests,
-            and self-correct failing projects.
-          </p>
+      <header className="topbar">
+        <div className="brand">
+          <div className="logo-dot" />
+          <div>
+            <p className="eyebrow">SASDS</p>
+            <strong>Single Agent SDS</strong>
+          </div>
         </div>
+        <nav className="nav">
+          <a href="#requirements">Requirements</a>
+          <a href="#code-generation">Code</a>
+          <a href="#tests">Tests</a>
+          <a href="#self-correction">Self-Fix</a>
+          <a href="#review">Review</a>
+          <a href="#projects">Projects</a>
+          <a href="#runs">History</a>
+          <a href="#github">Sync</a>
+        </nav>
         <div className="status">
           <span className="badge">Backend</span>
           <span>{backendStatus}</span>
         </div>
       </header>
 
-      <Section title="Requirements">
-        <label className="label">
-          Requirements Text
-          <textarea
-            value={requirementsText}
-            onChange={(e) => setRequirementsText(e.target.value)}
-            rows={6}
-            placeholder="Describe the project requirements..."
-          />
-        </label>
-        <div className="actions">
-          <button onClick={onAnalyzeRequirements} disabled={analysisState === "loading"}>
-            {analysisState === "loading" ? "Analyzing..." : "Analyze Requirements"}
-          </button>
-          {analysisState === "error" && <span className="error">{analysisError}</span>}
-        </div>
-        <JsonBlock data={analysisResult} />
-      </Section>
-
-      <Section title="Code Generation">
-        <p className="hint">
-          Uses the requirements (and optional analysis) to generate project files.
-        </p>
-        <div className="actions">
-          <button onClick={onGenerateCode} disabled={codeState === "loading"}>
-            {codeState === "loading" ? "Generating..." : "Generate Code"}
-          </button>
-          {codeState === "error" && <span className="error">{codeError}</span>}
-        </div>
-        <label className="label">
-          Generated Files (summary)
-          <textarea value={generatedFilesPreview} readOnly rows={6} />
-        </label>
-        <JsonBlock data={codeResult} />
-        {codeResult?.files?.length ? (
+      <section className="hero">
+        <div className="hero__content">
+          <div className="eyebrow">Production-ready AI Delivery</div>
+          <h1>
+            Build, test, review, and ship with a single autonomous agent.
+          </h1>
+          <p className="subtitle">
+            Analyze requirements, generate code, create tests, self-correct failures, and
+            review quality—all in one streamlined experience.
+          </p>
           <div className="actions">
-            <button onClick={onWriteCode} disabled={writeState === "loading"}>
-              {writeState === "loading" ? "Saving..." : "Write to Disk"}
+            <button onClick={onAnalyzeRequirements} disabled={analysisState === "loading"}>
+              {analysisState === "loading" ? "Analyzing..." : "Analyze Now"}
             </button>
-            {writeState === "error" && <span className="error">{writeError}</span>}
-            {writeState === "success" && (
-              <span className="success">{writeMessage}</span>
-            )}
+            <button
+              className="secondary"
+              onClick={() => {
+                const el = document.getElementById("code-generation");
+                if (el) el.scrollIntoView({ behavior: "smooth" });
+              }}
+            >
+              Jump to Code
+            </button>
           </div>
-        ) : null}
-      </Section>
+          <div className="statbar">
+            <div className="stat">
+              <span className="stat__label">Auto Tests</span>
+              <span className="stat__value">Pytest suites</span>
+            </div>
+            <div className="stat">
+              <span className="stat__label">Self-heal</span>
+              <span className="stat__value">LLM-powered fixes</span>
+            </div>
+            <div className="stat">
+              <span className="stat__label">Reviews</span>
+              <span className="stat__value">Structured issues</span>
+            </div>
+          </div>
+        </div>
+        <div className="hero__panel">
+          <div className="panel">
+            <div className="panel__title">Pipeline</div>
+            <ul className="timeline">
+              <li>Analyze requirements</li>
+              <li>Generate code</li>
+              <li>Generate tests</li>
+              <li>Self-correct failures</li>
+              <li>Review & ship</li>
+            </ul>
+            <div className="panel__status">
+              <span className="badge">Backend</span>
+              <span>{backendStatus}</span>
+            </div>
+          </div>
+        </div>
+      </section>
 
-      <Section title="Test Generation">
-        <p className="hint">
-          Provide requirements and the generated files to create pytest suites.
-        </p>
-        <div className="actions">
-          <button
-            onClick={onGenerateTests}
-            disabled={testsState === "loading" || !codeResult?.files?.length}
-            title={!codeResult?.files?.length ? "Generate code first" : ""}
+      <main className="layout">
+        <div className="flow">
+          <Section
+            id="requirements"
+            step={1}
+            title="Requirements Intake"
+            description="Capture the vision. Analyze natural language and derive structured modules, entities, APIs, and gaps."
           >
-            {testsState === "loading" ? "Generating..." : "Generate Tests"}
-          </button>
-          {testsState === "error" && <span className="error">{testsError}</span>}
-        </div>
-        <JsonBlock data={testsResult} />
-      </Section>
+            <label className="label">
+              Requirements Text
+              <textarea
+                value={requirementsText}
+                onChange={(e) => setRequirementsText(e.target.value)}
+                rows={6}
+                placeholder="Describe the project requirements..."
+              />
+            </label>
+            <div className="actions">
+              <button onClick={onAnalyzeRequirements} disabled={analysisState === "loading"}>
+                {analysisState === "loading" ? "Analyzing..." : "Analyze Requirements"}
+              </button>
+              {analysisState === "error" && <span className="error">{analysisError}</span>}
+            </div>
+            <JsonBlock data={analysisResult} />
+          </Section>
 
-      <Section title="Self Correction">
-        <p className="hint">
-          Point at a generated project folder (after writing code to disk) to run the
-          self-correction loop.
-        </p>
-        <div className="form-grid">
-          <label className="label">
-            Project Path
-            <input
-              value={selfFixPath}
-              onChange={(e) => setSelfFixPath(e.target.value)}
-              placeholder="generated_projects/project_xxxx"
-            />
-          </label>
-          <label className="label">
-            Max Attempts
-            <input
-              type="number"
-              min={1}
-              max={10}
-              value={selfFixAttempts}
-              onChange={(e) => setSelfFixAttempts(Number(e.target.value))}
-            />
-          </label>
-        </div>
-        <div className="actions">
-          <button onClick={onRunSelfFix} disabled={selfFixState === "loading"}>
-            {selfFixState === "loading" ? "Running..." : "Run Self-Correction"}
-          </button>
-          {selfFixState === "error" && <span className="error">{selfFixError}</span>}
-        </div>
-        <JsonBlock data={selfFixResult} />
-      </Section>
-
-      <Section title="Code Review">
-        <p className="hint">
-          Reviews generated code (and tests if available) for readability, correctness,
-          security, and best practices.
-        </p>
-        <div className="actions">
-          <button
-            onClick={onReviewCode}
-            disabled={reviewState === "loading" || (!codeResult?.files?.length && !testsResult?.tests?.length)}
-            title={!codeResult?.files?.length && !testsResult?.tests?.length ? "Generate code/tests first" : ""}
+          <Section
+            id="code-generation"
+            step={2}
+            title="Code Generation"
+            description="Generate FastAPI projects with structured files, then persist them to disk."
           >
-            {reviewState === "loading" ? "Reviewing..." : "Run Code Review"}
-          </button>
-          {reviewState === "error" && <span className="error">{reviewError}</span>}
-        </div>
-        {reviewResult && (
-          <>
-            <p className="hint">{reviewResult.summary}</p>
-            <JsonBlock data={reviewResult} />
-          </>
-        )}
-      </Section>
+            <p className="hint">
+              Uses the requirements (and optional analysis) to generate project files.
+            </p>
+            <div className="actions">
+              <button onClick={onGenerateCode} disabled={codeState === "loading"}>
+                {codeState === "loading" ? "Generating..." : "Generate Code"}
+              </button>
+              {codeState === "error" && <span className="error">{codeError}</span>}
+            </div>
+            <label className="label">
+              Generated Files (summary)
+              <textarea value={generatedFilesPreview} readOnly rows={6} />
+            </label>
+            <JsonBlock data={codeResult} />
+            {codeResult?.files?.length ? (
+              <div className="actions">
+                <button onClick={onWriteCode} disabled={writeState === "loading"}>
+                  {writeState === "loading" ? "Saving..." : "Write to Disk"}
+                </button>
+                {writeState === "error" && <span className="error">{writeError}</span>}
+                {writeState === "success" && <span className="success">{writeMessage}</span>}
+              </div>
+            ) : null}
+          </Section>
 
-      <Section title="Version Sync (GitHub stub)">
-        <p className="hint">
-          Optional: call the GitHub sync stub for the generated project path. Configure
-          `GITHUB_TOKEN` and `GITHUB_REPO` on the backend to enable real sync.
-        </p>
-        <div className="actions">
-          <button onClick={onSyncGithub} disabled={githubState === "loading"}>
-            {githubState === "loading" ? "Syncing..." : "Sync Project"}
-          </button>
-          {githubState === "error" && <span className="error">{githubError}</span>}
-          {githubState === "success" && <span className="success">{githubMsg}</span>}
-        </div>
-      </Section>
+          <Section
+            id="tests"
+            title="Test Generation"
+            description="Create pytest suites from requirements and generated code."
+            step={3}
+          >
+            <p className="hint">
+              Provide requirements and the generated files to create pytest suites.
+            </p>
+            <div className="actions">
+              <button
+                onClick={onGenerateTests}
+                disabled={testsState === "loading" || !codeResult?.files?.length}
+                title={!codeResult?.files?.length ? "Generate code first" : ""}
+              >
+                {testsState === "loading" ? "Generating..." : "Generate Tests"}
+              </button>
+              {testsState === "error" && <span className="error">{testsError}</span>}
+            </div>
+            <JsonBlock data={testsResult} />
+          </Section>
 
-      <Section title="Generated Projects">
-        <p className="hint">
-          Lists folders under <code>generated_projects/</code>. You can set the self-fix
-          path or download a zip archive.
-        </p>
-        <div className="actions">
-          <button onClick={onLoadProjects} disabled={projectsState === "loading"}>
-            {projectsState === "loading" ? "Loading..." : "Refresh List"}
-          </button>
-          {projectsState === "error" && <span className="error">{projectsError}</span>}
-        </div>
-        {projectsData?.projects?.length ? (
-          <ul className="list">
-            {projectsData.projects.map((p) => (
-              <li key={p.project_id} className="list-item">
-                <div>
-                  <div className="list-title">{p.project_id}</div>
-                  <div className="list-subtitle">{p.project_path}</div>
-                  <div className="list-meta">Created: {p.created_at}</div>
-                </div>
-                <div className="actions">
-                  <button onClick={() => setSelfFixPath(p.project_path)}>
-                    Use for Self-Fix
-                  </button>
-                  <a
-                    className="ghost-link"
-                    href={`${API_BASE}/projects/${encodeURIComponent(p.project_id)}/download`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Download
-                  </a>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="hint">No generated projects yet.</p>
-        )}
-      </Section>
+          <Section
+            id="self-correction"
+            title="Self Correction"
+            description="Run pytest, detect failing files, and loop fixes with Gemini until green."
+            step={4}
+          >
+            <p className="hint">
+              Point at a generated project folder (after writing code to disk) to run the
+              self-correction loop.
+            </p>
+            <div className="form-grid">
+              <label className="label">
+                Project Path
+                <input
+                  value={selfFixPath}
+                  onChange={(e) => setSelfFixPath(e.target.value)}
+                  placeholder="generated_projects/project_xxxx"
+                />
+              </label>
+              <label className="label">
+                Max Attempts
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={selfFixAttempts}
+                  onChange={(e) => setSelfFixAttempts(Number(e.target.value))}
+                />
+              </label>
+            </div>
+            <div className="actions">
+              <button onClick={onRunSelfFix} disabled={selfFixState === "loading"}>
+                {selfFixState === "loading" ? "Running..." : "Run Self-Correction"}
+              </button>
+              {selfFixState === "error" && <span className="error">{selfFixError}</span>}
+            </div>
+            <JsonBlock data={selfFixResult} />
+          </Section>
 
-      <Section title="Run History">
-        <p className="hint">
-          Shows recent analysis, codegen, test, self-fix, write, and review events stored
-          in the metadata database.
-        </p>
-        <div className="actions">
-          <button onClick={onLoadRuns} disabled={runsState === "loading"}>
-            {runsState === "loading" ? "Loading..." : "Refresh Runs"}
-          </button>
-          {runsState === "error" && <span className="error">{runsError}</span>}
+          <Section
+            id="review"
+            title="Code Review"
+            description="LLM-assisted review for readability, correctness, security, and best practices."
+            step={5}
+          >
+            <div className="actions">
+              <button
+                onClick={onReviewCode}
+                disabled={
+                  reviewState === "loading" ||
+                  (!codeResult?.files?.length && !testsResult?.tests?.length)
+                }
+                title={
+                  !codeResult?.files?.length && !testsResult?.tests?.length
+                    ? "Generate code/tests first"
+                    : ""
+                }
+              >
+                {reviewState === "loading" ? "Reviewing..." : "Run Code Review"}
+              </button>
+              {reviewState === "error" && <span className="error">{reviewError}</span>}
+            </div>
+            {reviewResult && (
+              <>
+                <p className="hint">{reviewResult.summary}</p>
+                <JsonBlock data={reviewResult} />
+              </>
+            )}
+          </Section>
+
+          <Section
+            id="projects"
+            title="Generated Projects"
+            description="Browse generated projects, set one for self-fix, or download an archive."
+            step={6}
+          >
+            <div className="actions">
+              <button onClick={onLoadProjects} disabled={projectsState === "loading"}>
+                {projectsState === "loading" ? "Loading..." : "Refresh List"}
+              </button>
+              {projectsState === "error" && <span className="error">{projectsError}</span>}
+            </div>
+            {projectsData?.projects?.length ? (
+              <ul className="list">
+                {projectsData.projects.map((p) => (
+                  <li key={p.project_id} className="list-item">
+                    <div>
+                      <div className="list-title">{p.project_id}</div>
+                      <div className="list-subtitle">{p.project_path}</div>
+                      <div className="list-meta">Created: {p.created_at}</div>
+                    </div>
+                    <div className="actions">
+                      <button onClick={() => setSelfFixPath(p.project_path)}>
+                        Use for Self-Fix
+                      </button>
+                      <a
+                        className="ghost-link"
+                        href={`${API_BASE}/projects/${encodeURIComponent(p.project_id)}/download`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Download
+                      </a>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="hint">No generated projects yet.</p>
+            )}
+          </Section>
+
+          <Section
+            id="runs"
+            title="Run History"
+            description="Recent pipeline events (analysis, codegen, tests, write, self-fix, review)."
+            step={7}
+          >
+            <div className="actions">
+              <button onClick={onLoadRuns} disabled={runsState === "loading"}>
+                {runsState === "loading" ? "Loading..." : "Refresh Runs"}
+              </button>
+              {runsState === "error" && <span className="error">{runsError}</span>}
+            </div>
+            <JsonBlock data={runsData} />
+          </Section>
+
+          <Section
+            id="github"
+            title="Version Sync (GitHub stub)"
+            description="Optional: call the GitHub sync stub for the generated project path. Configure GITHUB_TOKEN and GITHUB_REPO on the backend to enable real sync."
+            step={8}
+          >
+            <div className="actions">
+              <button onClick={onSyncGithub} disabled={githubState === "loading"}>
+                {githubState === "loading" ? "Syncing..." : "Sync Project"}
+              </button>
+              {githubState === "error" && <span className="error">{githubError}</span>}
+              {githubState === "success" && <span className="success">{githubMsg}</span>}
+            </div>
+          </Section>
         </div>
-        <JsonBlock data={runsData} />
-      </Section>
+      </main>
+
+      <footer className="footer">
+        <div className="footer__brand">
+          <div className="logo-dot" />
+          <div>
+            <div className="footer__title">SASDS</div>
+            <div className="footer__subtitle">AI-powered software delivery</div>
+          </div>
+        </div>
+        <div className="footer__links">
+          <a href="#requirements">Requirements</a>
+          <a href="#code-generation">Code</a>
+          <a href="#tests">Tests</a>
+          <a href="#self-correction">Self-Fix</a>
+          <a href="#review">Review</a>
+          <a href="#projects">Projects</a>
+          <a href="#runs">History</a>
+          <a href="#github">Sync</a>
+        </div>
+        <div className="footer__note">
+          Ready for publishing: polished structure, responsive layout, and full flow in one place.
+        </div>
+      </footer>
     </div>
   );
 }
