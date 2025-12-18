@@ -1,6 +1,4 @@
 import subprocess
-import os
-import tempfile
 from fastapi import HTTPException
 
 def run_tests_in_project(project_path: str) -> tuple:
@@ -24,6 +22,11 @@ def run_tests_in_project(project_path: str) -> tuple:
 
         return success, output
 
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=500,
+            detail="pytest is not installed or not available in PATH."
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500,

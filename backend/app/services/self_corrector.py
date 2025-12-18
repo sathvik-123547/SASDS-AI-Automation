@@ -1,6 +1,34 @@
 import os
+import re
 from app.utils.test_runner import run_tests_in_project
 from app.services.fix_generator import generate_fix
+
+
+def _detect_failing_file(output: str, project_path: str) -> str | None:
+    """
+    Parse pytest output to find the first failing file that actually exists on disk.
+    Accepts lines like:
+      - tests/test_sample.py:12: AssertionError
+      - E   File "/abs/path/tests/test_sample.py", line 12
+    """
+    for line in output.splitlines():
+        match = re.search(r"([^\s:]+\\.py)(?::\\d+)?", line)
+        if not match:
+            continue
+
+        candidate = match.group(1)
+        # Handle absolute vs relative paths
+        candidate_path = candidate
+        if not os.path.isabs(candidate_path):
+            candidate_path = os.path.join(project_path, candidate)
+
+        candidate_path = os.path.normpath(candidate_path)
+
+        if os.path.exists(candidate_path):
+            # return relative path to keep downstream behavior the same
+            return os.path.relpath(candidate_path, project_path)
+
+    return None
 
 def run_self_correction(project_path: str, max_attempts: int = 3):
     """
@@ -8,10 +36,13 @@ def run_self_correction(project_path: str, max_attempts: int = 3):
     Returns final status and output logs.
     """
 
+    failing_output = ""
+
     for attempt in range(1, max_attempts + 1):
         print(f"Attempt {attempt}: Running tests...")
 
         success, output = run_tests_in_project(project_path)
+        failing_output = output
 
         if success:
             return {
@@ -24,14 +55,7 @@ def run_self_correction(project_path: str, max_attempts: int = 3):
         # If tests failed:
         print("Tests failed, sending to Gemini for fixing...")
 
-        failing_output = output
-
-        # Detect failing file (pytest always shows file paths)
-        failing_file = None
-        for line in failing_output.split("\n"):
-            if line.strip().endswith(".py") and os.path.exists(os.path.join(project_path, line.strip())):
-                failing_file = line.strip()
-                break
+        failing_file = _detect_failing_file(failing_output, project_path)
 
         if not failing_file:
             return {

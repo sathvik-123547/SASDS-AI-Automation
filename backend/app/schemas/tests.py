@@ -1,5 +1,6 @@
-from pydantic import BaseModel
 from typing import List
+
+from pydantic import BaseModel, Field
 
 class TestGenerationRequest(BaseModel):
     requirements_text: str
@@ -10,4 +11,4 @@ class GeneratedTestFile(BaseModel):
     content: str
 
 class TestGenerationResponse(BaseModel):
-    tests: List[GeneratedTestFile]
+    tests: List[GeneratedTestFile] = Field(default_factory=list)

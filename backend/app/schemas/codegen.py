@@ -1,5 +1,6 @@
-from pydantic import BaseModel
 from typing import List, Optional
+
+from pydantic import BaseModel, Field
 
 from app.schemas.requirements import RequirementAnalysisResponse
 
@@ -16,4 +17,4 @@ class GeneratedFile(BaseModel):
 
 
 class CodeGenerationResponse(BaseModel):
-    files: List[GeneratedFile]
+    files: List[GeneratedFile] = Field(default_factory=list)

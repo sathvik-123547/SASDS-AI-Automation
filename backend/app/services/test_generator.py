@@ -13,6 +13,12 @@ def generate_tests(requirements_text: str, files: list) -> dict:
     Returns a dict matching TestGenerationResponse.
     """
 
+    if not requirements_text.strip():
+        raise HTTPException(status_code=400, detail="requirements_text cannot be empty.")
+
+    if not files:
+        raise HTTPException(status_code=400, detail="files must contain generated code.")
+
     # Convert code files to clean JSON string
     file_list_str = json.dumps(files, indent=2)
 

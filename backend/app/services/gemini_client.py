@@ -17,6 +17,11 @@ def analyze_requirements_with_gemini(requirements_text: str) -> dict:
     Sends the user requirements text to Gemini and expects a strictly JSON response
     that we will parse into our RequirementAnalysisResponse model.
     """
+    if not requirements_text.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="requirements_text cannot be empty."
+        )
     prompt = f"""
 You are an expert software architect. 
 Your ONLY task is to analyze the user's natural language software requirements 

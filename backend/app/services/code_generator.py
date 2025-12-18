@@ -23,6 +23,12 @@ def generate_code_with_gemini(requirements_text: str, analysis: dict | None = No
     We enforce JSON output using response_mime_type='application/json'
     so that response.text is guaranteed to be JSON.
     """
+    if not requirements_text.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="requirements_text cannot be empty."
+        )
+
     # Build analysis text (optional)
     analysis_str = json.dumps(analysis, indent=2) if analysis else "null"
 

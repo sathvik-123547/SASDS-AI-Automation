@@ -4,6 +4,7 @@ from app.schemas.codegen import (
     CodeGenerationResponse,
 )
 from app.services.code_generator import generate_code_with_gemini
+from app.services.metadata_store import log_event
 
 router = APIRouter(
     prefix="/code",
@@ -21,6 +22,11 @@ def generate_code_endpoint(payload: CodeGenerationRequest):
     result = generate_code_with_gemini(
         requirements_text=payload.requirements_text,
         analysis=analysis_dict,
+    )
+
+    log_event(
+        "codegen",
+        {"requirements_text": payload.requirements_text, "analysis": analysis_dict, "result": result},
     )
 
     return result

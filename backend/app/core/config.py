@@ -1,12 +1,19 @@
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
 
 load_dotenv()
+
 
 class Settings:
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 
-    # You can add more config options later:
-    # DEFAULT_MODEL: str = "gemini-1.5-flash"
+    # Metadata storage
+    DB_URL: str = os.getenv("DB_URL", "sqlite:///./metadata.sqlite")
+
+    # GitHub sync (optional)
+    GITHUB_TOKEN: str = os.getenv("GITHUB_TOKEN", "")
+    GITHUB_REPO: str = os.getenv("GITHUB_REPO", "")  # e.g. "owner/repo"
+    GITHUB_BRANCH: str = os.getenv("GITHUB_BRANCH", "main")
+
 
 settings = Settings()

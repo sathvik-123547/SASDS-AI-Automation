@@ -2,6 +2,7 @@ import uuid
 from fastapi import APIRouter
 from app.schemas.codegen import CodeGenerationResponse
 from app.utils.file_writer import write_generated_files
+from app.services.metadata_store import log_event
 
 router = APIRouter(
     prefix="/code",
@@ -19,6 +20,11 @@ def write_code_to_disk(payload: CodeGenerationResponse):
     project_path = write_generated_files(
         project_id=project_id,
         files=[file.dict() for file in payload.files]
+    )
+
+    log_event(
+        "write",
+        {"project_id": project_id, "project_path": project_path, "file_count": len(payload.files)},
     )
 
     return {
