@@ -18,3 +18,15 @@ class GeneratedFile(BaseModel):
 
 class CodeGenerationResponse(BaseModel):
     files: List[GeneratedFile] = Field(default_factory=list)
+
+
+class RefinementRequest(BaseModel):
+    path: str
+    content: str
+    instructions: str
+
+
+class RefinementResponse(BaseModel):
+    path: str
+    new_content: str
+    explanation: Optional[str] = None

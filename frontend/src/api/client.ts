@@ -7,7 +7,9 @@ import {
   CodeReviewResponse,
   TestGenerationResponse,
   ProjectsResponse,
-  RunsResponse
+  RunsResponse,
+  RefinementResponse,
+  AutoPilotResponse
 } from "../types";
 
 export const API_BASE =
@@ -43,6 +45,33 @@ export async function generateCode(
     method: "POST",
     body: JSON.stringify({ requirements_text, analysis: analysis ?? null })
   });
+}
+
+export async function generateCodeStream(
+  requirements_text: string,
+  analysis: RequirementAnalysisResponse | undefined,
+  onChunk: (chunk: string) => void
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/code/generate/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ requirements_text, analysis: analysis ?? null })
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Request failed with ${response.status}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("No response body");
+
+  const decoder = new TextDecoder();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    onChunk(decoder.decode(value, { stream: true }));
+  }
 }
 
 export async function writeCodeToDisk(
@@ -105,4 +134,64 @@ export async function listProjects(): Promise<ProjectsResponse> {
 export async function listRuns(limit = 50): Promise<RunsResponse> {
   return apiFetch<RunsResponse>(`/runs?limit=${limit}`, { method: "GET" });
 }
+export async function refineCode(
+  path: string,
+  content: string,
+  instructions: string
+): Promise<RefinementResponse> {
+  return apiFetch<RefinementResponse>("/refine/", {
+    method: "POST",
+    body: JSON.stringify({ path, content, instructions })
+  });
+}
 
+export async function createFile(
+  path: string,
+  content: string = "",
+  is_directory: boolean = false
+): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>("/files/create", {
+    method: "POST",
+    body: JSON.stringify({ path, content, is_directory })
+  });
+}
+
+export async function deleteFile(path: string): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>("/files/delete", {
+    method: "DELETE",
+    body: JSON.stringify({ path })
+  });
+}
+
+export async function renameFile(
+  old_path: string,
+  new_path: string
+): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>("/files/rename", {
+    method: "PUT",
+    body: JSON.stringify({ old_path, new_path })
+  });
+}
+
+export async function runAutoPilot(project_id: string): Promise<AutoPilotResponse> {
+  return apiFetch<AutoPilotResponse>("/autopilot/analyze", {
+    method: "POST",
+    body: JSON.stringify({ project_id })
+  });
+}
+
+export type ChatMessage = {
+  role: "user" | "model";
+  content: string;
+};
+
+export async function sendChatMessage(
+  message: string,
+  history: ChatMessage[],
+  context?: { selected_file_path?: string, selected_file_content?: string, project_structure?: string }
+): Promise<ChatMessage> {
+  return apiFetch<ChatMessage>("/chat/send", {
+    method: "POST",
+    body: JSON.stringify({ message, history, context })
+  });
+}

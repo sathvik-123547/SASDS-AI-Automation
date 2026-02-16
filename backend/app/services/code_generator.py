@@ -12,10 +12,12 @@ if not settings.GEMINI_API_KEY:
 
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
-GEMINI_MODEL_NAME = "models/gemini-2.5-flash"
+GEMINI_MODEL_NAME = settings.GEMINI_MODEL_NAME
 
 
-def generate_code_with_gemini(requirements_text: str, analysis: dict | None = None) -> dict:
+from typing import Optional
+
+def generate_code_with_gemini(requirements_text: str, analysis: Optional[dict] = None) -> dict:
     """
     Uses Gemini to generate a set of files (path + content) for the project.
     Returns a dict that matches CodeGenerationResponse.
@@ -114,3 +116,86 @@ Here is the structured analysis (may be null):
             status_code=500,
             detail=f"Gemini code generation failed: {str(e)}",
         )
+
+
+def refine_code_with_gemini(path: str, content: str, instructions: str) -> dict:
+    """
+    Uses Gemini to refine specific file content based on instructions.
+    """
+    prompt = f"""
+You are an expert software engineer.
+You are asked to MODIFY an existing file based on specific instructions.
+
+File Path: {path}
+
+Current Content:
+```python
+{content}
+```
+
+Instructions:
+"{instructions}"
+
+Return ONLY valid JSON with this structure:
+{{
+  "path": "{path}",
+  "new_content": "The FULL updated file content",
+  "explanation": "A brief explanation of changes"
+}}
+""".strip()
+
+    try:
+        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+        response = model.generate_content(
+            prompt,
+            generation_config={"response_mime_type": "application/json"},
+        )
+        
+        return json.loads(response.text)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Refinement failed: {str(e)}")
+
+
+def generate_code_with_gemini_stream(requirements_text: str, analysis: Optional[dict] = None):
+    """
+    Generator that yields chunks of text from Gemini for real-time streaming.
+    Uses a special prompt format with delimiters.
+    """
+    analysis_str = json.dumps(analysis, indent=2) if analysis else "null"
+    
+    prompt = f"""
+You are an expert software engineer.
+Design a CLEAN, MODULAR Python backend project based on the following requirements.
+
+Requirements:
+{requirements_text}
+
+Analysis:
+{analysis_str}
+
+Output the files one by one using this EXACT format:
+
+### FILE: path/to/file.py
+<file content here>
+### END FILE ###
+
+Rules:
+- NO markdown code blocks (```python ... ```).
+- NO JSON.
+- Just plain text with the delimiters above.
+- Ensure all files needed for a working MVP are included.
+- "path" should be relative to project root.
+    """.strip()
+
+    try:
+        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+        # We assume the model respects the text format. 
+        # stream=True returns an iterator of chunks.
+        response = model.generate_content(prompt, stream=True)
+        
+        for chunk in response:
+            if chunk.text:
+                yield chunk.text
+
+    except Exception as e:
+        yield f"ERROR: {str(e)}"

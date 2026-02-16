@@ -30,3 +30,26 @@ def generate_code_endpoint(payload: CodeGenerationRequest):
     )
 
     return result
+
+
+from fastapi.responses import StreamingResponse
+from app.services.code_generator import generate_code_with_gemini_stream
+
+@router.post("/generate/stream")
+def generate_code_stream_endpoint(payload: CodeGenerationRequest):
+    """
+    Stream generated code as text chunks.
+    Format:
+    ### FILE: path
+    content
+    ### END FILE ###
+    """
+    analysis_dict = payload.analysis.dict() if payload.analysis else None
+    
+    return StreamingResponse(
+        generate_code_with_gemini_stream(
+            requirements_text=payload.requirements_text,
+            analysis=analysis_dict
+        ),
+        media_type="text/plain"
+    )

@@ -10,10 +10,12 @@ if not settings.GEMINI_API_KEY:
 
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
-MODEL_NAME = "models/gemini-2.5-flash"
+MODEL_NAME = settings.GEMINI_MODEL_NAME
 
 
-def review_code(requirements_text: str | None, files: list) -> dict:
+from typing import Optional
+
+def review_code(requirements_text: Optional[str], files: list) -> dict:
     """
     Use Gemini to review a set of files and produce structured issues.
     Returns a dict matching CodeReviewResponse.

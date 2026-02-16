@@ -9,7 +9,7 @@ if not settings.GEMINI_API_KEY:
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
 # You can switch models here if needed
-GEMINI_MODEL_NAME = "models/gemini-2.5-flash"  # or another supported model
+GEMINI_MODEL_NAME = settings.GEMINI_MODEL_NAME  # or another supported model
 
 
 def analyze_requirements_with_gemini(requirements_text: str) -> dict:

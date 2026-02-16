@@ -15,5 +15,7 @@ class Settings:
     GITHUB_REPO: str = os.getenv("GITHUB_REPO", "")  # e.g. "owner/repo"
     GITHUB_BRANCH: str = os.getenv("GITHUB_BRANCH", "main")
 
+    GEMINI_MODEL_NAME: str = os.getenv("GEMINI_MODEL_NAME", "models/gemini-2.5-flash")
+
 
 settings = Settings()

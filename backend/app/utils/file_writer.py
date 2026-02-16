@@ -1,5 +1,8 @@
 import os
 
+
+BASE_DIR = os.path.abspath("generated_projects")
+
 def write_generated_files(project_id: str, files: list) -> str:
     """
     Writes generated files to disk under:

@@ -9,13 +9,14 @@ router = APIRouter(
 )
 
 
+from typing import Optional
+
 class GithubSyncRequest(BaseModel):
     project_path: str
-    commit_message: str | None = "Sync generated project"
+    commit_message: Optional[str] = "Sync generated project"
 
 
 @router.post("/sync")
 def sync_project_endpoint(payload: GithubSyncRequest):
     return sync_project(payload.project_path, payload.commit_message or "Sync generated project")
-
 

@@ -92,4 +92,34 @@ export type RunLogItem = {
 export type RunsResponse = {
   runs: RunLogItem[];
 };
+export type RefinementRequest = {
+  path: string;
+  content: string;
+  instructions: string;
+};
 
+export type AutoPilotIssue = {
+  severity: "high" | "medium" | "low";
+  file: string;
+  line?: number;
+  description: string;
+  suggestion: string;
+};
+
+export type AutoPilotImprovement = {
+  type: string;
+  description: string;
+  file?: string;
+};
+
+export type AutoPilotResponse = {
+  summary: string;
+  issues: AutoPilotIssue[];
+  improvements: AutoPilotImprovement[];
+};
+
+export type RefinementResponse = {
+  path: string;
+  new_content: string;
+  explanation?: string | null;
+};

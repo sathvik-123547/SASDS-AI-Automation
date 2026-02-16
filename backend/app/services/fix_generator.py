@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from app.core.config import settings
 
 genai.configure(api_key=settings.GEMINI_API_KEY)
-MODEL = "models/gemini-2.5-flash"
+MODEL = settings.GEMINI_MODEL_NAME
 
 def generate_fix(file_path: str, file_content: str, test_output: str) -> str:
     """

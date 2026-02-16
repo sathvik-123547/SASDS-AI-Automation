@@ -4,7 +4,9 @@ from app.utils.test_runner import run_tests_in_project
 from app.services.fix_generator import generate_fix
 
 
-def _detect_failing_file(output: str, project_path: str) -> str | None:
+from typing import Optional
+
+def _detect_failing_file(output: str, project_path: str) -> Optional[str]:
     """
     Parse pytest output to find the first failing file that actually exists on disk.
     Accepts lines like:

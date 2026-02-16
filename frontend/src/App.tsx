@@ -1,602 +1,575 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { Terminal as TerminalIcon, PanelBottom, Bot, X, AlertTriangle, CheckCircle, Lightbulb, MessageSquare, FileText } from "lucide-react";
+import { TerminalComponent } from "./components/Terminal";
 import {
   analyzeRequirements,
   generateCode,
-  generateTests,
-  runSelfFix,
+  generateCodeStream,
   writeCodeToDisk,
-  reviewCode,
-  syncGithub,
-  listProjects,
-  listRuns,
-  API_BASE
+  createFile,
+  deleteFile,
+  renameFile,
+  runAutoPilot,
+  sendChatMessage,
+  ChatMessage
 } from "./api/client";
 import {
   CodeGenerationResponse,
   RequirementAnalysisResponse,
-  TestGenerationResponse,
-  CodeReviewResponse,
-  ProjectsResponse,
-  RunsResponse
+  AutoPilotResponse
 } from "./types";
+import { parseStreamBuffer } from "./lib/stream-parser";
+import { FileExplorer, FileNode } from "./components/FileExplorer";
+import { buildFileTree } from "./lib/file-utils";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+import { CodeViewer } from "./components/CodeViewer";
+import { ChatInterface } from "./components/ChatInterface";
 
 type LoadState = "idle" | "loading" | "error" | "success";
-
-function StepBadge({ step }: { step: number }) {
-  return <span className="step-badge">Step {step}</span>;
-}
-
-function Section(props: {
-  id?: string;
-  step: number;
-  title: string;
-  description?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="card" id={props.id}>
-      <header className="card__header">
-        <div className="card__title-wrap">
-          <StepBadge step={props.step} />
-          <div>
-            <p className="eyebrow small">workflow</p>
-            <h2>{props.title}</h2>
-          </div>
-        </div>
-      </header>
-      {props.description ? (
-        <p className="card__description">{props.description}</p>
-      ) : null}
-      <div className="card__body">{props.children}</div>
-    </section>
-  );
-}
-
-function JsonBlock<T>({ data }: { data: T | undefined }) {
-  if (!data) return null;
-  return <pre className="json-block">{JSON.stringify(data, null, 2)}</pre>;
-}
+type SidebarMode = "requirements" | "chat";
 
 export default function App() {
   const [backendStatus, setBackendStatus] = useState<string>("Checking...");
+  const [requirementsText, setRequirementsText] = useState<string>("Build a simple task manager API...");
+  const [showTerminal, setShowTerminal] = useState(true);
 
-  const [requirementsText, setRequirementsText] = useState<string>(
-    "Build a simple task manager API with projects and tasks."
-  );
-
+  // Pipeline States
   const [analysisResult, setAnalysisResult] = useState<RequirementAnalysisResponse>();
   const [analysisState, setAnalysisState] = useState<LoadState>("idle");
-  const [analysisError, setAnalysisError] = useState<string>("");
 
   const [codeResult, setCodeResult] = useState<CodeGenerationResponse>();
   const [codeState, setCodeState] = useState<LoadState>("idle");
-  const [codeError, setCodeError] = useState<string>("");
+  const [projectId, setProjectId] = useState<string | null>(null);
 
-  const [testsResult, setTestsResult] = useState<TestGenerationResponse>();
-  const [testsState, setTestsState] = useState<LoadState>("idle");
-  const [testsError, setTestsError] = useState<string>("");
+  const [selectedFile, setSelectedFile] = useState<FileNode | null>(null);
 
-  const [writeState, setWriteState] = useState<LoadState>("idle");
-  const [writeMessage, setWriteMessage] = useState<string>("");
-  const [writeError, setWriteError] = useState<string>("");
-  const [lastProjectId, setLastProjectId] = useState<string>("");
-  const [lastProjectPath, setLastProjectPath] = useState<string>("");
+  // Streaming Buffer
+  const streamBuffer = useRef("");
 
-  const [reviewState, setReviewState] = useState<LoadState>("idle");
-  const [reviewError, setReviewError] = useState<string>("");
-  const [reviewResult, setReviewResult] = useState<CodeReviewResponse>();
+  // Auto-Pilot State
+  const [autoPilotResult, setAutoPilotResult] = useState<AutoPilotResponse | null>(null);
+  const [autoPilotState, setAutoPilotState] = useState<LoadState>("idle");
+  const [showAutoPilotModal, setShowAutoPilotModal] = useState(false);
 
-  const [githubState, setGithubState] = useState<LoadState>("idle");
-  const [githubMsg, setGithubMsg] = useState<string>("");
-  const [githubError, setGithubError] = useState<string>("");
-
-  const [selfFixPath, setSelfFixPath] = useState<string>("generated_projects");
-  const [selfFixAttempts, setSelfFixAttempts] = useState<number>(3);
-  const [selfFixState, setSelfFixState] = useState<LoadState>("idle");
-  const [selfFixResult, setSelfFixResult] = useState<Record<string, unknown>>();
-  const [selfFixError, setSelfFixError] = useState<string>("");
-
-  const [projectsState, setProjectsState] = useState<LoadState>("idle");
-  const [projectsData, setProjectsData] = useState<ProjectsResponse>();
-  const [projectsError, setProjectsError] = useState<string>("");
-
-  const [runsState, setRunsState] = useState<LoadState>("idle");
-  const [runsData, setRunsData] = useState<RunsResponse>();
-  const [runsError, setRunsError] = useState<string>("");
+  // Sidebar State
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>("requirements");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [isChatLoading, setIsChatLoading] = useState(false);
 
   useEffect(() => {
     fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/ping`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Unavailable");
-        return res.json();
-      })
+      .then((res) => res.ok ? res.json() : Promise.reject("Unavailable"))
       .then((data) => setBackendStatus(data.message || "OK"))
-      .catch(() =>
-        setBackendStatus("Backend is not reachable. Is it running on port 8000?")
-      );
+      .catch(() => setBackendStatus("Offline"));
   }, []);
 
-  const generatedFilesPreview = useMemo(() => {
-    if (!codeResult?.files?.length) return "No files generated yet.";
-    return codeResult.files
-      .map((f, idx) => `${idx + 1}. ${f.path}${f.description ? ` – ${f.description}` : ""}`)
-      .join("\n");
+  const fileTree = useMemo(() => {
+    if (!codeResult?.files) return [];
+    return buildFileTree(codeResult.files.map(f => ({ path: f.path, content: f.content })));
   }, [codeResult]);
 
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // --- Requirements Logic ---
   async function onAnalyzeRequirements() {
     setAnalysisState("loading");
-    setAnalysisError("");
+    setErrorMessage(null);
     try {
       const result = await analyzeRequirements(requirementsText);
       setAnalysisResult(result);
       setAnalysisState("success");
-    } catch (err) {
+    } catch (err: any) {
       setAnalysisState("error");
-      setAnalysisError(
-        err instanceof Error ? err.message : "Failed to analyze requirements."
-      );
+      setErrorMessage(err.message || "Analysis failed");
     }
   }
 
   async function onGenerateCode() {
     setCodeState("loading");
-    setCodeError("");
+    setErrorMessage(null);
+    streamBuffer.current = "";
+    setCodeResult({ files: [] }); // Clear previous result
+    setSelectedFile(null);
+
     try {
-      const result = await generateCode(requirementsText, analysisResult);
-      setCodeResult(result);
+      // Stream!
+      await generateCodeStream(requirementsText, analysisResult, (chunk) => {
+        streamBuffer.current += chunk;
+        const parsedFiles = parseStreamBuffer(streamBuffer.current);
+
+        setCodeResult({
+          files: parsedFiles.map(pf => ({
+            path: pf.path,
+            content: pf.content,
+            description: pf.isComplete ? "Generated" : "Generating..."
+          }))
+        });
+
+        // Auto-select latest file
+        if (parsedFiles.length > 0) {
+          const lastFile = parsedFiles[parsedFiles.length - 1];
+          if (lastFile.path) {
+            setSelectedFile({
+              name: lastFile.path.split('/').pop() || lastFile.path,
+              path: lastFile.path,
+              content: lastFile.content,
+              type: 'file'
+            });
+          }
+        }
+      });
+
       setCodeState("success");
-    } catch (err) {
-      setCodeState("error");
-      setCodeError(err instanceof Error ? err.message : "Failed to generate code.");
-    }
-  }
 
-  async function onGenerateTests() {
-    setTestsState("loading");
-    setTestsError("");
-    try {
-      const files = codeResult?.files ?? [];
-      const result = await generateTests(requirementsText, files);
-      setTestsResult(result);
-      setTestsState("success");
-    } catch (err) {
-      setTestsState("error");
-      setTestsError(err instanceof Error ? err.message : "Failed to generate tests.");
-    }
-  }
+      // Finalize and Write
+      const finalFiles = parseStreamBuffer(streamBuffer.current);
+      const output = { files: finalFiles.map(f => ({ path: f.path, content: f.content })) };
 
-  async function onWriteCode() {
-    setWriteState("loading");
-    setWriteError("");
-    setWriteMessage("");
-    try {
-      const response = await writeCodeToDisk(codeResult);
-      setWriteMessage(
-        `Project saved at ${response.project_path} (id: ${response.project_id})`
-      );
-      setLastProjectId(response.project_id);
-      setLastProjectPath(response.project_path);
-      setWriteState("success");
-    } catch (err) {
-      setWriteState("error");
-      setWriteError(err instanceof Error ? err.message : "Failed to write code to disk.");
-    }
-  }
-
-  async function onReviewCode() {
-    setReviewState("loading");
-    setReviewError("");
-    try {
-      const files =
-        (codeResult?.files ?? []).map((f) => ({
-          path: f.path,
-          content: f.content,
-          description: f.description ?? undefined
-        })) ?? [];
-
-      const testFiles =
-        (testsResult?.tests ?? []).map((t) => ({
-          path: t.path,
-          content: t.content,
-          description: "Generated test"
-        })) ?? [];
-
-      const allFiles = [...files, ...testFiles];
-      if (!allFiles.length) {
-        throw new Error("Generate code or tests first to run a review.");
+      // Auto-save
+      try {
+        const writeResult = await writeCodeToDisk(output);
+        setProjectId(writeResult.project_id);
+        console.log("Project written to:", writeResult.project_path);
+      } catch (writeErr) {
+        console.error("Failed to write to disk:", writeErr);
       }
 
-      const result = await reviewCode(allFiles, requirementsText);
-      setReviewResult(result);
-      setReviewState("success");
-    } catch (err) {
-      setReviewState("error");
-      setReviewError(err instanceof Error ? err.message : "Review failed.");
+    } catch (err: any) {
+      setCodeState("error");
+      setErrorMessage(err.message || "Code generation failed");
     }
   }
 
-  async function onSyncGithub() {
-    setGithubState("loading");
-    setGithubError("");
-    setGithubMsg("");
+  // --- Auto-Pilot Logic ---
+  async function onRunAutoPilot() {
+    if (!projectId) {
+      alert("Project must be generated and saved first.");
+      return;
+    }
+    setAutoPilotState("loading");
+    setShowAutoPilotModal(true);
     try {
-      const result = await syncGithub(selfFixPath, "Sync generated project");
-      setGithubState("success");
-      setGithubMsg(result.reason || (result.synced ? "Synced" : "Completed"));
-    } catch (err) {
-      setGithubState("error");
-      setGithubError(err instanceof Error ? err.message : "GitHub sync failed.");
+      const result = await runAutoPilot(projectId);
+      setAutoPilotResult(result);
+      setAutoPilotState("success");
+    } catch (err: any) {
+      setAutoPilotState("error");
+      alert(`Auto-Pilot failed: ${err.message}`);
     }
   }
 
-  async function onRunSelfFix() {
-    setSelfFixState("loading");
-    setSelfFixError("");
-    try {
-      const result = await runSelfFix(selfFixPath, selfFixAttempts);
-      setSelfFixResult(result);
-      setSelfFixState("success");
-    } catch (err) {
-      setSelfFixState("error");
-      setSelfFixError(err instanceof Error ? err.message : "Self-correction failed.");
-    }
-  }
+  // --- Chat Logic ---
+  const handleSendMessage = async (message: string) => {
+    const newUserMsg: ChatMessage = { role: "user", content: message };
+    setChatMessages(prev => [...prev, newUserMsg]);
+    setIsChatLoading(true);
 
-  async function onLoadProjects() {
-    setProjectsState("loading");
-    setProjectsError("");
     try {
-      const res = await listProjects();
-      setProjectsData(res);
-      setProjectsState("success");
-    } catch (err) {
-      setProjectsState("error");
-      setProjectsError(err instanceof Error ? err.message : "Failed to load projects.");
-    }
-  }
+      // Prepare context
+      const context: any = {};
+      if (selectedFile) {
+        context.selected_file_path = selectedFile.path;
+        context.selected_file_content = selectedFile.content;
+      }
+      if (codeResult) {
+        context.project_structure = codeResult.files.map(f => f.path).join("\n");
+      }
 
-  async function onLoadRuns() {
-    setRunsState("loading");
-    setRunsError("");
-    try {
-      const res = await listRuns(50);
-      setRunsData(res);
-      setRunsState("success");
-    } catch (err) {
-      setRunsState("error");
-      setRunsError(err instanceof Error ? err.message : "Failed to load runs.");
+      const response = await sendChatMessage(message, [...chatMessages, newUserMsg], context);
+      setChatMessages(prev => [...prev, response]);
+    } catch (err: any) {
+      const errorMsg: ChatMessage = { role: "model", content: `Error: ${err.message}` };
+      setChatMessages(prev => [...prev, errorMsg]);
+    } finally {
+      setIsChatLoading(false);
     }
-  }
+  };
+
+  // --- File Operations ---
+  const handleFileUpdate = (path: string, newContent: string) => {
+    if (!codeResult) return;
+
+    const updatedFiles = codeResult.files.map(f =>
+      f.path === path ? { ...f, content: newContent } : f
+    );
+
+    setCodeResult({ ...codeResult, files: updatedFiles });
+
+    if (selectedFile && selectedFile.path === path) {
+      setSelectedFile({ ...selectedFile, content: newContent });
+    }
+  };
+
+  const handleCreateFile = async (parentPath: string) => {
+    if (!projectId) {
+      alert("Project must be generated and saved first.");
+      return;
+    }
+    const fileName = prompt("Enter file name:");
+    if (!fileName) return;
+
+    const newPath = parentPath ? `${parentPath}/${fileName}` : fileName;
+    const cleanPath = newPath.replace(/^\//, "");
+
+    try {
+      await createFile(`${projectId}/${cleanPath}`, "", false);
+      // Update local state is tricky with streaming result, but we can append
+      const newFile = { path: cleanPath, content: "", description: "New file" };
+      const newFiles = [...(codeResult?.files || []), newFile];
+      setCodeResult({ ...codeResult!, files: newFiles });
+    } catch (err: any) {
+      alert(`Failed to create file: ${err.message}`);
+    }
+  };
+
+  const handleCreateFolder = async (parentPath: string) => {
+    if (!projectId) {
+      alert("Project must be generated and saved first.");
+      return;
+    }
+    const folderName = prompt("Enter folder name:");
+    if (!folderName) return;
+
+    const newPath = parentPath ? `${parentPath}/${folderName}` : folderName;
+    const cleanPath = newPath.replace(/^\//, "");
+
+    try {
+      await createFile(`${projectId}/${cleanPath}`, "", true);
+    } catch (err: any) {
+      alert(`Failed to create folder: ${err.message}`);
+    }
+  };
+
+  const handleDelete = async (path: string) => {
+    if (!projectId) return;
+    if (!confirm(`Delete ${path}?`)) return;
+    try {
+      await deleteFile(`${projectId}/${path}`);
+      const newFiles = (codeResult?.files || []).filter(f => !f.path.startsWith(path) && f.path !== path);
+      setCodeResult({ ...codeResult!, files: newFiles });
+      if (selectedFile && (selectedFile.path === path || selectedFile.path.startsWith(path))) {
+        setSelectedFile(null);
+      }
+    } catch (err: any) {
+      alert(`Failed to delete: ${err.message}`);
+    }
+  };
+
+  const handleRename = async (path: string) => {
+    if (!projectId) return;
+    const parts = path.split('/');
+    const currentName = parts.pop();
+    const newName = prompt("Enter new name:", currentName);
+    if (!newName || newName === currentName) return;
+
+    const oldPathDir = parts.join('/');
+    const newPath = oldPathDir ? `${oldPathDir}/${newName}` : newName;
+
+    try {
+      await renameFile(`${projectId}/${path}`, `${projectId}/${newPath}`);
+
+      const newFiles = (codeResult?.files || []).map(f => {
+        if (f.path === path) return { ...f, path: newPath };
+        if (f.path.startsWith(path + "/")) {
+          return { ...f, path: f.path.replace(path, newPath) };
+        }
+        return f;
+      });
+      setCodeResult({ ...codeResult!, files: newFiles });
+
+      if (selectedFile && selectedFile.path === path) {
+        setSelectedFile({ ...selectedFile, path: newPath, name: newName || "" });
+      }
+    } catch (err: any) {
+      alert(`Failed to rename: ${err.message}`);
+    }
+  };
 
   return (
-    <div className="page">
-      <header className="topbar">
-        <div className="brand">
-          <div className="logo-dot" />
-          <div>
-            <p className="eyebrow">SASDS</p>
-            <strong>Single Agent SDS</strong>
-          </div>
+    <div className="h-screen w-full flex flex-col bg-background text-foreground overflow-hidden relative">
+      {/* Header */}
+      <header className="h-14 border-b flex items-center px-6 justify-between bg-card shrink-0">
+        <div className="flex items-center gap-2 font-bold text-lg">
+          <div className="w-3 h-3 rounded-full bg-primary" />
+          SASDS <span className="text-muted-foreground font-normal text-sm ml-1">AI Automation</span>
         </div>
-        <nav className="nav">
-          <a href="#requirements">Requirements</a>
-          <a href="#code-generation">Code</a>
-          <a href="#tests">Tests</a>
-          <a href="#self-correction">Self-Fix</a>
-          <a href="#review">Review</a>
-          <a href="#projects">Projects</a>
-          <a href="#runs">History</a>
-          <a href="#github">Sync</a>
-        </nav>
-        <div className="status">
-          <span className="badge">Backend</span>
-          <span>{backendStatus}</span>
+        <div className="flex items-center gap-2 text-sm">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onRunAutoPilot}
+            className="text-purple-500 hover:text-purple-600 hover:bg-purple-500/10"
+            disabled={!projectId}
+            title={!projectId ? "Generate a project first" : "Run Auto-Pilot Analysis"}
+          >
+            <Bot className="w-4 h-4 mr-2" />
+            Auto-Pilot
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowTerminal(!showTerminal)}
+            className={showTerminal ? "bg-accent" : ""}
+            title="Toggle Terminal"
+          >
+            <PanelBottom className="w-4 h-4 mr-2" />
+            Terminal
+          </Button>
+          <span className={cn("flex items-center gap-2 px-3 py-1 rounded-full border bg-muted/50 ml-2", backendStatus === "OK" ? "text-green-500 border-green-500/20" : "text-red-500 border-red-500/20")}>
+            <div className={cn("w-2 h-2 rounded-full", backendStatus === "OK" ? "bg-green-500 animate-pulse" : "bg-red-500")} />
+            {backendStatus}
+          </span>
         </div>
       </header>
 
-      <section className="hero">
-        <div className="hero__content">
-          <div className="eyebrow">Production-ready AI Delivery</div>
-          <h1>
-            Build, test, review, and ship with a single autonomous agent.
-          </h1>
-          <p className="subtitle">
-            Analyze requirements, generate code, create tests, self-correct failures, and
-            review quality—all in one streamlined experience.
-          </p>
-          <div className="actions">
-            <button onClick={onAnalyzeRequirements} disabled={analysisState === "loading"}>
-              {analysisState === "loading" ? "Analyzing..." : "Analyze Now"}
+      {/* Main Content - Split Pane */}
+      <div className="flex-1 flex overflow-hidden">
+
+        {/* Left Sidebar - Tabs: Requirements / Chat */}
+        <div className="w-[400px] border-r flex flex-col bg-card/10 shrink-0">
+          {/* Tabs Header */}
+          <div className="flex border-b">
+            <button
+              className={cn(
+                "flex-1 py-2 text-xs font-medium uppercase tracking-wider flex items-center justify-center gap-2 transition-colors",
+                sidebarMode === "requirements" ? "bg-background border-b-2 border-primary text-foreground" : "text-muted-foreground hover:bg-muted/50"
+              )}
+              onClick={() => setSidebarMode("requirements")}
+            >
+              <FileText className="w-3 h-3" /> Requirements
             </button>
             <button
-              className="secondary"
-              onClick={() => {
-                const el = document.getElementById("code-generation");
-                if (el) el.scrollIntoView({ behavior: "smooth" });
-              }}
+              className={cn(
+                "flex-1 py-2 text-xs font-medium uppercase tracking-wider flex items-center justify-center gap-2 transition-colors",
+                sidebarMode === "chat" ? "bg-background border-b-2 border-primary text-foreground" : "text-muted-foreground hover:bg-muted/50"
+              )}
+              onClick={() => setSidebarMode("chat")}
             >
-              Jump to Code
+              <MessageSquare className="w-3 h-3" /> Agent Chat
             </button>
           </div>
-          <div className="statbar">
-            <div className="stat">
-              <span className="stat__label">Auto Tests</span>
-              <span className="stat__value">Pytest suites</span>
-            </div>
-            <div className="stat">
-              <span className="stat__label">Self-heal</span>
-              <span className="stat__value">LLM-powered fixes</span>
-            </div>
-            <div className="stat">
-              <span className="stat__label">Reviews</span>
-              <span className="stat__value">Structured issues</span>
-            </div>
-          </div>
-        </div>
-        <div className="hero__panel">
-          <div className="panel">
-            <div className="panel__title">Pipeline</div>
-            <ul className="timeline">
-              <li>Analyze requirements</li>
-              <li>Generate code</li>
-              <li>Generate tests</li>
-              <li>Self-correct failures</li>
-              <li>Review & ship</li>
-            </ul>
-            <div className="panel__status">
-              <span className="badge">Backend</span>
-              <span>{backendStatus}</span>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      <main className="layout">
-        <div className="flow">
-          <Section
-            id="requirements"
-            step={1}
-            title="Requirements Intake"
-            description="Capture the vision. Analyze natural language and derive structured modules, entities, APIs, and gaps."
-          >
-            <label className="label">
-              Requirements Text
-              <textarea
-                value={requirementsText}
-                onChange={(e) => setRequirementsText(e.target.value)}
-                rows={6}
-                placeholder="Describe the project requirements..."
-              />
-            </label>
-            <div className="actions">
-              <button onClick={onAnalyzeRequirements} disabled={analysisState === "loading"}>
-                {analysisState === "loading" ? "Analyzing..." : "Analyze Requirements"}
-              </button>
-              {analysisState === "error" && <span className="error">{analysisError}</span>}
-            </div>
-            <JsonBlock data={analysisResult} />
-          </Section>
-
-          <Section
-            id="code-generation"
-            step={2}
-            title="Code Generation"
-            description="Generate FastAPI projects with structured files, then persist them to disk."
-          >
-            <p className="hint">
-              Uses the requirements (and optional analysis) to generate project files.
-            </p>
-            <div className="actions">
-              <button onClick={onGenerateCode} disabled={codeState === "loading"}>
-                {codeState === "loading" ? "Generating..." : "Generate Code"}
-              </button>
-              {codeState === "error" && <span className="error">{codeError}</span>}
-            </div>
-            <label className="label">
-              Generated Files (summary)
-              <textarea value={generatedFilesPreview} readOnly rows={6} />
-            </label>
-            <JsonBlock data={codeResult} />
-            {codeResult?.files?.length ? (
-              <div className="actions">
-                <button onClick={onWriteCode} disabled={writeState === "loading"}>
-                  {writeState === "loading" ? "Saving..." : "Write to Disk"}
-                </button>
-                {writeState === "error" && <span className="error">{writeError}</span>}
-                {writeState === "success" && <span className="success">{writeMessage}</span>}
-              </div>
-            ) : null}
-          </Section>
-
-          <Section
-            id="tests"
-            title="Test Generation"
-            description="Create pytest suites from requirements and generated code."
-            step={3}
-          >
-            <p className="hint">
-              Provide requirements and the generated files to create pytest suites.
-            </p>
-            <div className="actions">
-              <button
-                onClick={onGenerateTests}
-                disabled={testsState === "loading" || !codeResult?.files?.length}
-                title={!codeResult?.files?.length ? "Generate code first" : ""}
-              >
-                {testsState === "loading" ? "Generating..." : "Generate Tests"}
-              </button>
-              {testsState === "error" && <span className="error">{testsError}</span>}
-            </div>
-            <JsonBlock data={testsResult} />
-          </Section>
-
-          <Section
-            id="self-correction"
-            title="Self Correction"
-            description="Run pytest, detect failing files, and loop fixes with Gemini until green."
-            step={4}
-          >
-            <p className="hint">
-              Point at a generated project folder (after writing code to disk) to run the
-              self-correction loop.
-            </p>
-            <div className="form-grid">
-              <label className="label">
-                Project Path
-                <input
-                  value={selfFixPath}
-                  onChange={(e) => setSelfFixPath(e.target.value)}
-                  placeholder="generated_projects/project_xxxx"
-                />
-              </label>
-              <label className="label">
-                Max Attempts
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={selfFixAttempts}
-                  onChange={(e) => setSelfFixAttempts(Number(e.target.value))}
-                />
-              </label>
-            </div>
-            <div className="actions">
-              <button onClick={onRunSelfFix} disabled={selfFixState === "loading"}>
-                {selfFixState === "loading" ? "Running..." : "Run Self-Correction"}
-              </button>
-              {selfFixState === "error" && <span className="error">{selfFixError}</span>}
-            </div>
-            <JsonBlock data={selfFixResult} />
-          </Section>
-
-          <Section
-            id="review"
-            title="Code Review"
-            description="LLM-assisted review for readability, correctness, security, and best practices."
-            step={5}
-          >
-            <div className="actions">
-              <button
-                onClick={onReviewCode}
-                disabled={
-                  reviewState === "loading" ||
-                  (!codeResult?.files?.length && !testsResult?.tests?.length)
-                }
-                title={
-                  !codeResult?.files?.length && !testsResult?.tests?.length
-                    ? "Generate code/tests first"
-                    : ""
-                }
-              >
-                {reviewState === "loading" ? "Reviewing..." : "Run Code Review"}
-              </button>
-              {reviewState === "error" && <span className="error">{reviewError}</span>}
-            </div>
-            {reviewResult && (
+          {/* Tab Content */}
+          <div className="flex-1 overflow-hidden flex flex-col">
+            {sidebarMode === "requirements" ? (
               <>
-                <p className="hint">{reviewResult.summary}</p>
-                <JsonBlock data={reviewResult} />
+                <div className="p-4 border-b space-y-4">
+                  <div>
+                    <textarea
+                      className="w-full h-32 p-3 rounded-md border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all font-sans"
+                      value={requirementsText}
+                      onChange={(e) => setRequirementsText(e.target.value)}
+                      placeholder="Describe your project requirements here..."
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={onAnalyzeRequirements}
+                      disabled={analysisState === "loading"}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      {analysisState === "loading" ? "Analyzing..." : "1. Analyze"}
+                    </Button>
+                    <Button
+                      onClick={onGenerateCode}
+                      disabled={codeState === "loading"}
+                      className="flex-1"
+                    >
+                      {codeState === "loading" ? "Generating..." : "2. Generate"}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                  {analysisResult && (
+                    <div className="space-y-3">
+                      <h3 className="text-xs font-semibold text-muted-foreground uppercase">Requirement Summary</h3>
+                      <div className="bg-muted/50 p-3 rounded-md text-xs border space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Modules:</span>
+                          <span>{analysisResult.modules?.length || 0}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Entities:</span>
+                          <span>{analysisResult.entities?.length || 0}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {codeResult && (
+                    <div className="space-y-3">
+                      <h3 className="text-xs font-semibold text-muted-foreground uppercase">Project Structure</h3>
+                      <div className="text-sm bg-primary/10 p-3 border border-primary/20 rounded-md text-primary font-medium">
+                        {codeResult.files.length} Files Generated
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {projectId ? `Project ID: ${projectId}` : "Streaming..."}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {errorMessage && (
+                    <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-md text-destructive text-sm space-y-2 animate-in fade-in slide-in-from-top-1">
+                      <div className="font-bold flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-destructive" />
+                        Request Failed
+                      </div>
+                      <div className="text-xs opacity-90 break-words leading-relaxed">
+                        {errorMessage}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </>
-            )}
-          </Section>
-
-          <Section
-            id="projects"
-            title="Generated Projects"
-            description="Browse generated projects, set one for self-fix, or download an archive."
-            step={6}
-          >
-            <div className="actions">
-              <button onClick={onLoadProjects} disabled={projectsState === "loading"}>
-                {projectsState === "loading" ? "Loading..." : "Refresh List"}
-              </button>
-              {projectsState === "error" && <span className="error">{projectsError}</span>}
-            </div>
-            {projectsData?.projects?.length ? (
-              <ul className="list">
-                {projectsData.projects.map((p) => (
-                  <li key={p.project_id} className="list-item">
-                    <div>
-                      <div className="list-title">{p.project_id}</div>
-                      <div className="list-subtitle">{p.project_path}</div>
-                      <div className="list-meta">Created: {p.created_at}</div>
-                    </div>
-                    <div className="actions">
-                      <button onClick={() => setSelfFixPath(p.project_path)}>
-                        Use for Self-Fix
-                      </button>
-                      <a
-                        className="ghost-link"
-                        href={`${API_BASE}/projects/${encodeURIComponent(p.project_id)}/download`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Download
-                      </a>
-                    </div>
-                  </li>
-                ))}
-              </ul>
             ) : (
-              <p className="hint">No generated projects yet.</p>
+              <div className="flex-1 flex flex-col h-full">
+                <ChatInterface
+                  messages={chatMessages}
+                  onSendMessage={handleSendMessage}
+                  isLoading={isChatLoading}
+                  currentFile={selectedFile?.path}
+                />
+              </div>
             )}
-          </Section>
-
-          <Section
-            id="runs"
-            title="Run History"
-            description="Recent pipeline events (analysis, codegen, tests, write, self-fix, review)."
-            step={7}
-          >
-            <div className="actions">
-              <button onClick={onLoadRuns} disabled={runsState === "loading"}>
-                {runsState === "loading" ? "Loading..." : "Refresh Runs"}
-              </button>
-              {runsState === "error" && <span className="error">{runsError}</span>}
-            </div>
-            <JsonBlock data={runsData} />
-          </Section>
-
-          <Section
-            id="github"
-            title="Version Sync (GitHub stub)"
-            description="Optional: call the GitHub sync stub for the generated project path. Configure GITHUB_TOKEN and GITHUB_REPO on the backend to enable real sync."
-            step={8}
-          >
-            <div className="actions">
-              <button onClick={onSyncGithub} disabled={githubState === "loading"}>
-                {githubState === "loading" ? "Syncing..." : "Sync Project"}
-              </button>
-              {githubState === "error" && <span className="error">{githubError}</span>}
-              {githubState === "success" && <span className="success">{githubMsg}</span>}
-            </div>
-          </Section>
-        </div>
-      </main>
-
-      <footer className="footer">
-        <div className="footer__brand">
-          <div className="logo-dot" />
-          <div>
-            <div className="footer__title">SASDS</div>
-            <div className="footer__subtitle">AI-powered software delivery</div>
           </div>
         </div>
-        <div className="footer__links">
-          <a href="#requirements">Requirements</a>
-          <a href="#code-generation">Code</a>
-          <a href="#tests">Tests</a>
-          <a href="#self-correction">Self-Fix</a>
-          <a href="#review">Review</a>
-          <a href="#projects">Projects</a>
-          <a href="#runs">History</a>
-          <a href="#github">Sync</a>
+
+        {/* Middle - File Explorer (Keep same) */}
+        <div className="w-[280px] border-r flex flex-col bg-card/5 shrink-0">
+          <div className="h-10 border-b flex items-center px-4 bg-muted/30">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Explorer</span>
+          </div>
+          <FileExplorer
+            data={fileTree}
+            onFileSelect={setSelectedFile}
+            className="flex-1"
+            onCreateFile={handleCreateFile}
+            onCreateFolder={handleCreateFolder}
+            onDelete={handleDelete}
+            onRename={handleRename}
+          />
         </div>
-        <div className="footer__note">
-          Ready for publishing: polished structure, responsive layout, and full flow in one place.
+
+        {/* Right - Code Preview & Terminal */}
+        <div className="flex-1 flex flex-col bg-background relative overflow-hidden">
+          <div className="flex-1 flex flex-col min-h-0">
+            {selectedFile ? (
+              <CodeViewer
+                file={selectedFile}
+                onUpdate={handleFileUpdate}
+              />
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground bg-grid-slate-900/[0.04]">
+                <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-4">
+                  <div className="w-6 h-6 border-2 border-muted-foreground/30 rounded" />
+                </div>
+                <p className="text-sm font-medium">Select a file to preview code</p>
+                <p className="text-xs opacity-60 mt-1">Generate code or browse the explorer</p>
+              </div>
+            )}
+          </div>
+
+          {/* Terminal Panel */}
+          {showTerminal && (
+            <div className="h-[30%] border-t bg-[#1e1e1e] flex flex-col shrink-0">
+              <div className="h-8 flex items-center px-4 border-b border-[#333] bg-[#252526] text-white select-none">
+                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-[#cccccc]">
+                  <TerminalIcon className="w-3 h-3" />
+                  Terminal
+                </div>
+              </div>
+              <div className="flex-1 min-h-0">
+                <TerminalComponent />
+              </div>
+            </div>
+          )}
         </div>
-      </footer>
+      </div>
+
+      {/* Auto-Pilot Modal */}
+      {showAutoPilotModal && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-background border rounded-lg shadow-xl w-full max-w-3xl max-h-[80vh] flex flex-col animate-in zoom-in-95">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                <Bot className="w-5 h-5 text-purple-500" /> Auto-Pilot Analysis
+              </h2>
+              <Button variant="ghost" size="sm" onClick={() => setShowAutoPilotModal(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {autoPilotState === "loading" ? (
+                <div className="flex flex-col items-center justify-center h-40 space-y-4">
+                  <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                  <p className="text-muted-foreground">Analyzing project structure and code...</p>
+                </div>
+              ) : autoPilotResult ? (
+                <>
+                  <div className="bg-muted p-4 rounded-md text-sm">
+                    <h3 className="font-semibold mb-2">Summary</h3>
+                    <p className="text-muted-foreground">{autoPilotResult.summary}</p>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold flex items-center gap-2 mb-3">
+                      <AlertTriangle className="w-4 h-4 text-orange-500" />
+                      Issues Found ({autoPilotResult.issues.length})
+                    </h3>
+                    <div className="space-y-3">
+                      {autoPilotResult.issues.map((issue, idx) => (
+                        <div key={idx} className="border p-3 rounded-md text-sm bg-card">
+                          <div className="flex items-center gap-2 font-medium">
+                            <span className={cn(
+                              "uppercase text-[10px] px-1.5 py-0.5 rounded border",
+                              issue.severity === "high" ? "bg-red-500/10 text-red-500 border-red-500/20" :
+                                issue.severity === "medium" ? "bg-orange-500/10 text-orange-500 border-orange-500/20" : "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                            )}>{issue.severity}</span>
+                            <span>{issue.file}</span>
+                            {issue.line && <span className="text-muted-foreground text-xs">:L{issue.line}</span>}
+                          </div>
+                          <p className="mt-1 text-muted-foreground">{issue.description}</p>
+                          <div className="mt-2 bg-muted/50 p-2 rounded text-xs">
+                            <span className="font-semibold text-primary">Suggestion: </span>
+                            {issue.suggestion}
+                          </div>
+                        </div>
+                      ))}
+                      {autoPilotResult.issues.length === 0 && (
+                        <p className="text-sm text-muted-foreground">No critical issues found.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold flex items-center gap-2 mb-3">
+                      <Lightbulb className="w-4 h-4 text-yellow-500" />
+                      Suggested Improvements ({autoPilotResult.improvements.length})
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {autoPilotResult.improvements.map((imp, idx) => (
+                        <div key={idx} className="border p-3 rounded-md text-sm bg-card/50">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs bg-secondary px-1.5 py-0.5 rounded text-secondary-foreground">{imp.type}</span>
+                            {imp.file && <span className="text-xs text-muted-foreground font-mono">{imp.file}</span>}
+                          </div>
+                          <p className="text-muted-foreground">{imp.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center text-red-500">Failed to load analysis.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
