@@ -5,6 +5,8 @@
 **Version:** 1.0  
 **Last Updated:** March 2026
 
+> **Note:** Diagrams use [Mermaid](https://mermaid.js.org/) syntax. They render automatically on GitHub, GitLab, VS Code (with Markdown Preview), and most modern markdown viewers.
+
 ---
 
 ## Table of Contents
@@ -28,30 +30,42 @@
 
 SASDS is a **full-stack, AI-powered IDE** that transforms natural language requirements into working software. The system follows a **layered architecture** with clear separation of concerns.
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     PRESENTATION LAYER (Frontend)                        │
-│  React 18 + TypeScript + Vite | Monaco Editor | xterm.js | Radix UI     │
-└─────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     API GATEWAY (FastAPI)                                │
-│  REST APIs | WebSocket | CORS | Middleware | Error Handling             │
-└─────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     AI SERVICE LAYER                                     │
-│  Requirements Analyzer | Code Generator | Test Gen | Review | Self-Fix    │
-│  Auto-Pilot | Chat Agent | Fix Generator | GitHub Sync                   │
-└─────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     STORAGE & INFRASTRUCTURE LAYER                       │
-│  SQLite (metadata) | File System (generated_projects) | GitHub API       │
-└─────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Presentation["Presentation Layer"]
+        FE[React 18 + TypeScript + Vite]
+        Monaco[Monaco Editor]
+        Xterm[xterm.js]
+        UI[Radix UI]
+    end
+
+    subgraph API["API Gateway"]
+        FastAPI[FastAPI]
+        REST[REST APIs]
+        WS[WebSocket]
+        MW[Middleware]
+    end
+
+    subgraph AI["AI Service Layer"]
+        Req[Requirements Analyzer]
+        Code[Code Generator]
+        Test[Test Generator]
+        Review[Code Reviewer]
+        Fix[Self-Fix]
+        Pilot[Auto-Pilot]
+        Chat[Chat Agent]
+        GitHub[GitHub Sync]
+    end
+
+    subgraph Storage["Storage Layer"]
+        SQLite[(SQLite)]
+        FS[(File System)]
+        GHAPI[GitHub API]
+    end
+
+    Presentation --> API
+    API --> AI
+    AI --> Storage
 ```
 
 ### 1.2 Component Responsibilities
@@ -118,110 +132,125 @@ SASDS-AI-Automation/
 
 ### 3.1 End-to-End Code Generation (Streaming)
 
-```
-User          Frontend         Backend API      Gemini AI       File System
-  │               │                  │                │               │
-  │ Enter reqs    │                  │                │               │
-  ├──────────────►│ POST /analyze    │                │               │
-  │               ├─────────────────►│ analyze        │               │
-  │               │                  ├──────────────►│               │
-  │               │                  │◄──────────────┤ (JSON)        │
-  │               │◄─────────────────┤                │               │
-  │               │                  │                │               │
-  │ Click Generate│                  │                │               │
-  ├──────────────►│ POST /stream     │                │               │
-  │               ├─────────────────►│ generate_stream│               │
-  │               │                  ├──────────────►│               │
-  │               │    ┌──────────────Streaming Loop─────────────────┐│
-  │               │    │  Gemini ──► Backend ──► Frontend (parse)     ││
-  │               │    └─────────────────────────────────────────────┘│
-  │               │                  │                │               │
-  │               │ POST /code/write │                │               │
-  │               ├─────────────────►│ write_files   │               │
-  │               │                  ├──────────────────────────────►│
-  │               │◄─────────────────┤                │   Success     │
-  │◄──────────────┤                  │                │               │
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant B as Backend API
+    participant G as Gemini AI
+    participant FS as File System
+
+    U->>F: Enter requirements
+    F->>B: POST /requirements/analyze
+    B->>G: Analyze prompt
+    G-->>B: Structured JSON
+    B-->>F: Analysis result
+
+    U->>F: Click Generate
+    F->>B: POST /code/generate/stream
+    B->>G: Generate code
+    loop Streaming
+        G-->>B: Chunk
+        B-->>F: Stream chunk
+        F->>F: Parse & display
+    end
+
+    F->>B: POST /code/write
+    B->>FS: Write files
+    FS-->>B: Success
+    B-->>F: Files created
+    F-->>U: Done
 ```
 
 ### 3.2 Self-Correction Loop
 
-```
-Client           Backend           Test Runner      Gemini          File System
-   │                │                    │               │                 │
-   │ POST /self/fix │                    │               │                 │
-   ├───────────────►│ run_pytest         │               │                 │
-   │                ├──────────────────►│               │                 │
-   │                │◄──────────────────┤ (fail)        │                 │
-   │                │ detect_failing_file│               │                 │
-   │                │ read_file ─────────────────────────────────────────►│
-   │                │ generate_fix       ├─────────────►│                 │
-   │                │                    │               │                 │
-   │                │◄──────────────────────────────────┤ (fixed code)    │
-   │                │ write_file ────────────────────────────────────────►│
-   │                │ run_pytest (retry) │               │                 │
-   │                ├──────────────────►│               │                 │
-   │                │◄──────────────────┤ (pass/fail)  │                 │
-   │◄───────────────┤ return result      │               │                 │
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant B as Backend
+    participant T as Test Runner
+    participant G as Gemini
+    participant FS as File System
+
+    C->>B: POST /self/fix
+    B->>T: run_pytest
+    T-->>B: Tests fail
+    B->>FS: read_file
+    FS-->>B: Original content
+    B->>G: generate_fix(file, code, error)
+    G-->>B: Fixed code
+    B->>FS: write_file
+    B->>T: run_pytest (retry)
+    alt Tests pass
+        T-->>B: Pass
+        B-->>C: success: true
+    else Tests fail
+        T-->>B: Fail
+        Note over B: Retry (max 3 attempts)
+    end
 ```
 
 ### 3.3 Terminal WebSocket Session
 
-```
-User         xterm.js       WebSocket       Python PTY       Shell
-  │              │               │                │             │
-  │ Connect      │ WS /terminal/ws               │             │
-  ├─────────────►│───────────────►│ Spawn PTY    │             │
-  │              │                ├─────────────►│ Start shell │
-  │              │                │              ├────────────►│
-  │              │                │              │             │
-  │ keypress     │ input          │ stdin        │ exec        │
-  ├─────────────►│───────────────►│─────────────►│────────────►│
-  │              │                │ stdout       │ output      │
-  │◄─────────────┤◄───────────────┤◄─────────────┤◄────────────┤
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant X as xterm.js
+    participant W as WebSocket
+    participant P as Python PTY
+    participant S as Shell
+
+    U->>X: Connect
+    X->>W: WS /terminal/ws
+    W->>P: Spawn PTY
+    P->>S: Start shell
+
+    loop Interactive Session
+        U->>X: keypress
+        X->>W: input
+        W->>P: stdin
+        P->>S: exec
+        S->>P: output
+        P->>W: stdout
+        W->>X: send
+        X->>U: render
+    end
 ```
 
 ---
 
 ## 4. Use Case Diagrams
 
-### 4.1 Actor–System Interactions (Text Diagram)
+### 4.1 Actor–System Interactions
 
-```
-                              ┌──────────────────────────────────────────┐
-                              │             SASDS System                 │
-                              │                                          │
-    ┌─────────┐               │  ┌─────────────────────────────────────┐  │
-    │ Developer│──────────────┼─►│ Analyze Requirements (NL → JSON)    │  │
-    └─────────┘               │  └─────────────────────────────────────┘  │
-          │                   │  ┌─────────────────────────────────────┐  │
-          │                   │  │ Generate Code (streaming)           │  │
-          └───────────────────┼─►─────────────────────────────────────│  │
-                              │  └─────────────────────────────────────┘  │
-                              │  ┌─────────────────────────────────────┐  │
-                              │  │ Write Project to Disk                 │  │
-                              │  └─────────────────────────────────────┘  │
-                              │  ┌─────────────────────────────────────┐  │
-                              │  │ Run Auto-Pilot Analysis              │  │
-                              │  └─────────────────────────────────────┘  │
-                              │  ┌─────────────────────────────────────┐  │
-                              │  │ Self-Correct (run tests, fix bugs)   │  │
-                              │  └─────────────────────────────────────┘  │
-                              │  ┌─────────────────────────────────────┐  │
-                              │  │ Chat with AI (context-aware)         │  │
-                              │  └─────────────────────────────────────┘  │
-                              │  ┌─────────────────────────────────────┐  │
-                              │  │ Refine File (NL instructions)       │  │
-                              │  └─────────────────────────────────────┘  │
-                              │  ┌─────────────────────────────────────┐  │
-                              │  │ Use Terminal (PTY shell)             │  │
-                              │  └─────────────────────────────────────┘  │
-                              │  ┌─────────────────────────────────────┐  │
-                              │  │ File CRUD (create/rename/delete)     │  │
-                              │  └─────────────────────────────────────┘  │
-                              │  ┌─────────────────────────────────────┐  │
-                              │  │ Sync to GitHub                       │  │
-                              │  └─────────────────────────────────────┘  │
-                              └──────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    Dev[Developer]
+
+    subgraph SASDS["SASDS System"]
+        direction TB
+        UC1[Analyze Requirements]
+        UC2[Generate Code]
+        UC3[Write Project]
+        UC4[Auto-Pilot Analysis]
+        UC5[Self-Correct Tests]
+        UC6[Chat with AI]
+        UC7[Refine File]
+        UC8[Use Terminal]
+        UC9[File CRUD]
+        UC10[Sync to GitHub]
+    end
+
+    Dev --> UC1
+    Dev --> UC2
+    Dev --> UC3
+    Dev --> UC4
+    Dev --> UC5
+    Dev --> UC6
+    Dev --> UC7
+    Dev --> UC8
+    Dev --> UC9
+    Dev --> UC10
 ```
 
 ### 4.2 Use Case Summary
@@ -245,66 +274,80 @@ User         xterm.js       WebSocket       Python PTY       Shell
 
 ### 5.1 Backend Schemas (Pydantic)
 
-```
-┌─────────────────────────────────┐
-│ RequirementAnalysisRequest      │
-├─────────────────────────────────┤
-│ + requirements_text: str        │
-└─────────────────────────────────┘
+```mermaid
+classDiagram
+    class RequirementAnalysisRequest {
+        +str requirements_text
+    }
 
-┌─────────────────────────────────┐     ┌─────────────────────────────────┐
-│ RequirementAnalysisResponse     │     │ ModuleItem                       │
-├─────────────────────────────────┤     ├─────────────────────────────────┤
-│ + modules: List[ModuleItem]      │────►│ + name: str                      │
-│ + entities: List[EntityItem]     │     │ + description: Optional[str]     │
-│ + apis: List[APIItem]            │     └─────────────────────────────────┘
-│ + non_functional_requirements   │
-│ + tech_stack_suggestions         │     ┌─────────────────────────────────┐
-│ + missing_information           │     │ EntityItem                       │
-└─────────────────────────────────┘     ├─────────────────────────────────┤
-                                         │ + name: str                      │
-         │                               │ + attributes: List[str]          │
-         │                               └─────────────────────────────────┘
-         │                               ┌─────────────────────────────────┐
-         │                               │ APIItem                           │
-         │                               ├─────────────────────────────────┤
-         │                               │ + name: str                       │
-         │                               │ + method: str                     │
-         │                               │ + path: str                       │
-         │                               │ + description: Optional[str]     │
-         │                               └─────────────────────────────────┘
+    class RequirementAnalysisResponse {
+        +List~ModuleItem~ modules
+        +List~EntityItem~ entities
+        +List~APIItem~ apis
+        +List~str~ non_functional_requirements
+        +List~str~ tech_stack_suggestions
+        +List~str~ missing_information
+    }
 
-┌─────────────────────────────────┐     ┌─────────────────────────────────┐
-│ CodeGenerationRequest           │     │ GeneratedFile                    │
-├─────────────────────────────────┤     ├─────────────────────────────────┤
-│ + requirements_text: str        │     │ + path: str                      │
-│ + analysis: Optional[Analysis] │     │ + description: Optional[str]     │
-└─────────────────────────────────┘     │ + content: str                    │
-         │                               └─────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────┐     ┌─────────────────────────────────┐
-│ CodeGenerationResponse          │     │ RefinementRequest                │
-├─────────────────────────────────┤     ├─────────────────────────────────┤
-│ + files: List[GeneratedFile]    │     │ + path: str                      │
-└─────────────────────────────────┘     │ + content: str                    │
-                                         │ + instructions: str              │
-                                         └─────────────────────────────────┘
+    class ModuleItem {
+        +str name
+        +Optional~str~ description
+    }
+
+    class EntityItem {
+        +str name
+        +List~str~ attributes
+    }
+
+    class APIItem {
+        +str name
+        +str method
+        +str path
+        +Optional~str~ description
+    }
+
+    class CodeGenerationRequest {
+        +str requirements_text
+        +Optional~Analysis~ analysis
+    }
+
+    class CodeGenerationResponse {
+        +List~GeneratedFile~ files
+    }
+
+    class GeneratedFile {
+        +str path
+        +Optional~str~ description
+        +str content
+    }
+
+    class RefinementRequest {
+        +str path
+        +str content
+        +str instructions
+    }
+
+    RequirementAnalysisResponse --> ModuleItem : contains
+    RequirementAnalysisResponse --> EntityItem : contains
+    RequirementAnalysisResponse --> APIItem : contains
+    CodeGenerationRequest --> CodeGenerationResponse : produces
+    CodeGenerationResponse --> GeneratedFile : contains
 ```
 
 ### 5.2 Database Model
 
-```
-┌─────────────────────────────────┐
-│ RunLog (SQLAlchemy)             │
-├─────────────────────────────────┤
-│ + id: Integer (PK)              │
-│ + created_at: DateTime          │
-│ + run_id: String                │
-│ + kind: String                  │  # analysis|codegen|tests|review|write
-│ + payload: Text (JSON)          │
-│ + note: String                  │
-└─────────────────────────────────┘
+```mermaid
+classDiagram
+    class RunLog {
+        +Integer id PK
+        +DateTime created_at
+        +String run_id
+        +String kind
+        +Text payload
+        +String note
+    }
+
+    note for RunLog "kind: analysis, codegen, tests, review, write"
 ```
 
 ---
@@ -346,28 +389,33 @@ Output: AsyncGenerator[str] (text chunks)
 
 ### 6.3 Self-Correction Algorithm
 
+```mermaid
+flowchart TD
+    Start([Start]) --> RunTests[Run pytest]
+    RunTests --> Pass{All tests pass?}
+    Pass -->|Yes| Success([Return success])
+    Pass -->|No| Detect[Detect failing file]
+    Detect --> HasFile{Failing file found?}
+    HasFile -->|No| Fail1([Return: Could not detect])
+    HasFile -->|Yes| Read[Read file content]
+    Read --> Fix[Generate fix via Gemini]
+    Fix --> Write[Write fixed file]
+    Write --> Attempt{Attempt < max?}
+    Attempt -->|Yes| RunTests
+    Attempt -->|No| MaxReached([Return: Max attempts reached])
+```
+
+**Pseudocode:**
 ```
 Algorithm: run_self_correction(project_path, max_attempts=3)
-Input: project_path (str), max_attempts (int)
-Output: { success, attempts, message, logs }
-
 1. FOR attempt = 1 TO max_attempts:
    a. (success, output) = run_pytest(project_path)
-   b. IF success: RETURN { success: true, attempts: attempt, logs: output }
+   b. IF success: RETURN { success: true, attempts: attempt }
    c. failing_file = _detect_failing_file(output, project_path)
    d. IF NOT failing_file: RETURN { success: false, message: "Could not detect failing file" }
-   e. original_content = read_file(project_path / failing_file)
-   f. fixed_content = generate_fix(failing_file, original_content, output)
-   g. write_file(project_path / failing_file, fixed_content)
-2. RETURN { success: false, attempts: max_attempts, message: "Max attempts reached" }
-
-Algorithm: _detect_failing_file(output, project_path)
-1. FOR each line IN output.splitlines():
-   a. match = regex ([^\s:]+\.py)(?::\d+)?
-   b. IF match: candidate = match.group(1)
-   c. candidate_path = normpath(join(project_path, candidate))
-   d. IF exists(candidate_path): RETURN relpath(candidate_path, project_path)
-2. RETURN null
+   e. fixed_content = generate_fix(failing_file, read_file(failing_file), output)
+   f. write_file(failing_file, fixed_content)
+2. RETURN { success: false, message: "Max attempts reached" }
 ```
 
 ---
