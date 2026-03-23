@@ -13,9 +13,9 @@
 
 1. [Software Architecture](#1-software-architecture)
 2. [Technical Architecture](#2-technical-architecture)
-3. [Sequence Diagrams](#3-sequence-diagrams)
+3. [Sequence Diagram](#3-sequence-diagram)
 4. [Use Case Diagrams](#4-use-case-diagrams)
-5. [Class Diagrams](#5-class-diagrams)
+5. [Class Diagram](#5-class-diagram)
 6. [Algorithms](#6-algorithms)
 7. [Implementation Steps](#7-implementation-steps)
 8. [Test Cases Table](#8-test-cases-table)
@@ -128,93 +128,41 @@ SASDS-AI-Automation/
 
 ---
 
-## 3. Sequence Diagrams
-
-### 3.1 End-to-End Code Generation (Streaming)
+## 3. Sequence Diagram
 
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant F as Frontend
-    participant B as Backend API
-    participant G as Gemini AI
-    participant FS as File System
+    participant AI as AI Agent
+    participant DB as Database
 
-    U->>F: Enter requirements
-    F->>B: POST /requirements/analyze
-    B->>G: Analyze prompt
-    G-->>B: Structured JSON
-    B-->>F: Analysis result
+    U->>AI: Submit requirements
+    AI->>DB: Store run log
+    AI->>AI: Analyze requirements
+    AI-->>U: Structured analysis
 
-    U->>F: Click Generate
-    F->>B: POST /code/generate/stream
-    B->>G: Generate code
+    U->>AI: Generate code
     loop Streaming
-        G-->>B: Chunk
-        B-->>F: Stream chunk
-        F->>F: Parse & display
+        AI->>AI: Generate chunks
+        AI-->>U: Stream code
     end
 
-    F->>B: POST /code/write
-    B->>FS: Write files
-    FS-->>B: Success
-    B-->>F: Files created
-    F-->>U: Done
-```
+    U->>AI: Write project
+    AI->>DB: Persist files
+    DB-->>AI: Success
+    AI-->>U: Project created
 
-### 3.2 Self-Correction Loop
+    U->>AI: Self-fix (optional)
+    AI->>DB: Read failing file
+    DB-->>AI: File content
+    AI->>AI: Generate fix
+    AI->>DB: Write fixed file
+    AI-->>U: Fix applied
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant B as Backend
-    participant T as Test Runner
-    participant G as Gemini
-    participant FS as File System
-
-    C->>B: POST /self/fix
-    B->>T: run_pytest
-    T-->>B: Tests fail
-    B->>FS: read_file
-    FS-->>B: Original content
-    B->>G: generate_fix(file, code, error)
-    G-->>B: Fixed code
-    B->>FS: write_file
-    B->>T: run_pytest (retry)
-    alt Tests pass
-        T-->>B: Pass
-        B-->>C: success: true
-    else Tests fail
-        T-->>B: Fail
-        Note over B: Retry (max 3 attempts)
-    end
-```
-
-### 3.3 Terminal WebSocket Session
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant X as xterm.js
-    participant W as WebSocket
-    participant P as Python PTY
-    participant S as Shell
-
-    U->>X: Connect
-    X->>W: WS /terminal/ws
-    W->>P: Spawn PTY
-    P->>S: Start shell
-
-    loop Interactive Session
-        U->>X: keypress
-        X->>W: input
-        W->>P: stdin
-        P->>S: exec
-        S->>P: output
-        P->>W: stdout
-        W->>X: send
-        X->>U: render
-    end
+    U->>AI: Chat / Refine / Auto-Pilot
+    AI->>DB: Read context
+    DB-->>AI: Project data
+    AI-->>U: Response
 ```
 
 ---
@@ -270,84 +218,35 @@ flowchart TB
 
 ---
 
-## 5. Class Diagrams
-
-### 5.1 Backend Schemas (Pydantic)
+## 5. Class Diagram
 
 ```mermaid
 classDiagram
-    class RequirementAnalysisRequest {
+    class User {
         +str requirements_text
+        +str selected_file
+        +str chat_message
+        +submit_requirements()
+        +generate_code()
+        +write_project()
+        +self_fix()
+        +chat()
+        +refine_file()
     }
 
-    class RequirementAnalysisResponse {
-        +List~ModuleItem~ modules
-        +List~EntityItem~ entities
-        +List~APIItem~ apis
-        +List~str~ non_functional_requirements
-        +List~str~ tech_stack_suggestions
-        +List~str~ missing_information
+    class AIAgent {
+        +str model_name
+        +analyze_requirements()
+        +generate_code_stream()
+        +generate_fix()
+        +review_code()
+        +chat_response()
+        +refine_code()
+        +autopilot_analyze()
     }
 
-    class ModuleItem {
-        +str name
-        +Optional~str~ description
-    }
-
-    class EntityItem {
-        +str name
-        +List~str~ attributes
-    }
-
-    class APIItem {
-        +str name
-        +str method
-        +str path
-        +Optional~str~ description
-    }
-
-    class CodeGenerationRequest {
-        +str requirements_text
-        +Optional~Analysis~ analysis
-    }
-
-    class CodeGenerationResponse {
-        +List~GeneratedFile~ files
-    }
-
-    class GeneratedFile {
-        +str path
-        +Optional~str~ description
-        +str content
-    }
-
-    class RefinementRequest {
-        +str path
-        +str content
-        +str instructions
-    }
-
-    RequirementAnalysisResponse --> ModuleItem : contains
-    RequirementAnalysisResponse --> EntityItem : contains
-    RequirementAnalysisResponse --> APIItem : contains
-    CodeGenerationRequest --> CodeGenerationResponse : produces
-    CodeGenerationResponse --> GeneratedFile : contains
-```
-
-### 5.2 Database Model
-
-```mermaid
-classDiagram
-    class RunLog {
-        +Integer id PK
-        +DateTime created_at
-        +String run_id
-        +String kind
-        +Text payload
-        +String note
-    }
-
-    note for RunLog "kind: analysis, codegen, tests, review, write"
+    User --> AIAgent : interacts
+    AIAgent --> User : responds
 ```
 
 ---
