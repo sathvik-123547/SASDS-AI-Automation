@@ -315,6 +315,74 @@ Algorithm: run_self_correction(project_path, max_attempts=3)
 2. RETURN { success: false, message: "Max attempts reached" }
 ```
 
+### 6.4 Broad Project Pseudocode
+
+High-level pseudocode describing the SASDS project flow:
+
+```
+PROGRAM SASDS_MAIN:
+    INIT backend_server
+    INIT frontend_app
+    MOUNT routers (requirements, codegen, files, chat, terminal, ...)
+    START API on port 8000
+    START frontend on port 5173
+    LISTEN for requests
+END PROGRAM
+
+PROGRAM REQUIREMENTS_TO_PROJECT (user_requirements):
+    // Phase 1: Analyze
+    analysis = AI_AGENT.analyze(user_requirements)
+    STORE log in DATABASE
+    RETURN analysis to USER
+
+    // Phase 2: Generate
+    LOOP stream chunk FROM AI_AGENT.generate_code(user_requirements, analysis):
+        PARSE chunk for ### FILE: path
+        DISPLAY chunk to USER
+    END LOOP
+
+    // Phase 3: Persist
+    project_id = GENERATE uuid
+    FOR each file IN parsed_files:
+        WRITE file TO generated_projects/project_id/path
+    END FOR
+    RETURN project_id to USER
+
+    // Optional: Self-fix
+    IF user requests self-fix:
+        RUN self_correction_loop(project_id)
+    END IF
+
+    // Optional: Chat / Refine / Auto-Pilot
+    IF user sends chat message:
+        context = READ project from DATABASE
+        response = AI_AGENT.chat(message, context)
+        RETURN response to USER
+    END IF
+END PROGRAM
+
+PROGRAM SELF_CORRECTION_LOOP (project_path):
+    FOR attempt = 1 TO max_attempts:
+        (passed, output) = RUN pytest IN project_path
+        IF passed: RETURN success
+        failing_file = DETECT from output
+        IF NOT failing_file: RETURN failure
+        content = READ failing_file
+        fixed = AI_AGENT.generate_fix(failing_file, content, output)
+        WRITE fixed TO failing_file
+    END FOR
+    RETURN max_attempts_reached
+END PROGRAM
+
+PROGRAM API_REQUEST_HANDLER (method, path, body):
+    VALIDATE body with Pydantic
+    ROUTE to appropriate service
+    CALL service function
+    LOG event to DATABASE
+    RETURN response OR stream
+END PROGRAM
+```
+
 ---
 
 ## 7. Implementation Steps
