@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:ui": "cypress open --e2e --browser electron",
+    "test:api": "cypress run --spec 'cypress/e2e/api/**/*.cy.ts'"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
@@ -28,6 +30,7 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.4.1",
     "autoprefixer": "^10.4.17",
+    "cypress": "^15.10.0",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.6.3",
