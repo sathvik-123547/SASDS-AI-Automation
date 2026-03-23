@@ -136,45 +136,30 @@ sequenceDiagram
     participant AI as AI Agent
     participant DB as Database
 
-    rect rgb(232, 245, 255)
-        Note over U,DB: Phase 1 — Requirements
-        U->>AI: Submit requirements
-        AI->>DB: Store log
-        AI-->>U: Analysis result
+    U->>AI: 1. Submit requirements
+    AI->>DB: Store log
+    AI-->>U: Analysis result
+
+    U->>AI: 2. Generate code
+    loop Stream
+        AI-->>U: Code chunk
     end
 
-    rect rgb(232, 255, 232)
-        Note over U,DB: Phase 2 — Code Generation
-        U->>AI: Generate code
-        loop Stream
-            AI-->>U: Code chunk
-        end
-    end
+    U->>AI: 3. Write project
+    AI->>DB: Persist files
+    DB-->>AI: OK
+    AI-->>U: Created
 
-    rect rgb(255, 245, 232)
-        Note over U,DB: Phase 3 — Persist
-        U->>AI: Write project
-        AI->>DB: Persist files
-        DB-->>AI: OK
-        AI-->>U: Created
-    end
+    U->>AI: 4. Self-fix (optional)
+    AI->>DB: Read file
+    DB-->>AI: Content
+    AI->>DB: Write fix
+    AI-->>U: Applied
 
-    rect rgb(255, 232, 245)
-        Note over U,DB: Phase 4 — Self-Fix (optional)
-        U->>AI: Self-fix
-        AI->>DB: Read file
-        DB-->>AI: Content
-        AI->>DB: Write fix
-        AI-->>U: Applied
-    end
-
-    rect rgb(245, 232, 255)
-        Note over U,DB: Phase 5 — Chat / Refine
-        U->>AI: Request
-        AI->>DB: Read context
-        DB-->>AI: Data
-        AI-->>U: Response
-    end
+    U->>AI: 5. Chat / Refine
+    AI->>DB: Read context
+    DB-->>AI: Data
+    AI-->>U: Response
 ```
 
 ---
@@ -234,6 +219,7 @@ flowchart TB
 
 ```mermaid
 classDiagram
+    direction LR
     class User {
         +str requirements_text
         +str selected_file
