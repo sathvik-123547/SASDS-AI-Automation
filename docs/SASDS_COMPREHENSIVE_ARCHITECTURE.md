@@ -136,33 +136,45 @@ sequenceDiagram
     participant AI as AI Agent
     participant DB as Database
 
-    U->>AI: Submit requirements
-    AI->>DB: Store run log
-    AI->>AI: Analyze requirements
-    AI-->>U: Structured analysis
-
-    U->>AI: Generate code
-    loop Streaming
-        AI->>AI: Generate chunks
-        AI-->>U: Stream code
+    rect rgb(232, 245, 255)
+        Note over U,DB: Phase 1 — Requirements
+        U->>AI: Submit requirements
+        AI->>DB: Store log
+        AI-->>U: Analysis result
     end
 
-    U->>AI: Write project
-    AI->>DB: Persist files
-    DB-->>AI: Success
-    AI-->>U: Project created
+    rect rgb(232, 255, 232)
+        Note over U,DB: Phase 2 — Code Generation
+        U->>AI: Generate code
+        loop Stream
+            AI-->>U: Code chunk
+        end
+    end
 
-    U->>AI: Self-fix (optional)
-    AI->>DB: Read failing file
-    DB-->>AI: File content
-    AI->>AI: Generate fix
-    AI->>DB: Write fixed file
-    AI-->>U: Fix applied
+    rect rgb(255, 245, 232)
+        Note over U,DB: Phase 3 — Persist
+        U->>AI: Write project
+        AI->>DB: Persist files
+        DB-->>AI: OK
+        AI-->>U: Created
+    end
 
-    U->>AI: Chat / Refine / Auto-Pilot
-    AI->>DB: Read context
-    DB-->>AI: Project data
-    AI-->>U: Response
+    rect rgb(255, 232, 245)
+        Note over U,DB: Phase 4 — Self-Fix (optional)
+        U->>AI: Self-fix
+        AI->>DB: Read file
+        DB-->>AI: Content
+        AI->>DB: Write fix
+        AI-->>U: Applied
+    end
+
+    rect rgb(245, 232, 255)
+        Note over U,DB: Phase 5 — Chat / Refine
+        U->>AI: Request
+        AI->>DB: Read context
+        DB-->>AI: Data
+        AI-->>U: Response
+    end
 ```
 
 ---
