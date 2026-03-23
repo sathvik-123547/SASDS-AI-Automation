@@ -70,12 +70,12 @@ flowchart TB
 
 ### 1.2 Component Responsibilities
 
-| Layer | Components | Responsibility |
-|-------|------------|----------------|
-| **Frontend** | App Shell, File Explorer, Code Viewer, Terminal, Chat | User interaction, state orchestration, real-time updates |
-| **API Gateway** | Routers, Middleware | Request routing, validation, CORS, logging |
-| **AI Services** | Gemini client, Code/Test/Review generators | Natural language processing, code generation, analysis |
-| **Persistence** | SQLite, File Writer | Run logs, generated project storage |
+| Layer | Components | Responsibility | Status |
+|-------|------------|----------------|--------|
+| **Frontend** | App Shell, File Explorer, Code Viewer, Terminal, Chat | User interaction, state orchestration, real-time updates | Active |
+| **API Gateway** | Routers, Middleware | Request routing, validation, CORS, logging | Active |
+| **AI Services** | Gemini client, Code/Test/Review generators | Natural language processing, code generation, analysis | Active |
+| **Persistence** | SQLite, File Writer | Run logs, generated project storage | Active |
 
 ---
 
@@ -83,13 +83,13 @@ flowchart TB
 
 ### 2.1 Technology Stack
 
-| Layer | Technologies |
-|-------|---------------|
-| **Frontend** | React 18, TypeScript 5.6+, Vite 6, TailwindCSS, Radix UI, Monaco Editor, xterm.js |
-| **Backend** | FastAPI 0.109+, Uvicorn, Python 3.9+ |
-| **AI** | Google Gemini 2.5 Flash (`google-generativeai`) |
-| **Database** | SQLite (default) via SQLAlchemy 2 |
-| **Infrastructure** | Docker Compose, PostgreSQL (optional), Redis (optional) |
+| Layer | Technologies | Status |
+|-------|---------------|--------|
+| **Frontend** | React 18, TypeScript 5.6+, Vite 6, TailwindCSS, Radix UI, Monaco Editor, xterm.js | In Use |
+| **Backend** | FastAPI 0.109+, Uvicorn, Python 3.9+ | In Use |
+| **AI** | Google Gemini 2.5 Flash (`google-generativeai`) | In Use |
+| **Database** | SQLite (default) via SQLAlchemy 2 | In Use |
+| **Infrastructure** | Docker Compose, PostgreSQL (optional), Redis (optional) | In Use |
 
 ### 2.2 Directory Structure
 
@@ -200,18 +200,18 @@ flowchart TB
 
 ### 4.2 Use Case Summary
 
-| Use Case ID | Use Case Name | Actor | Description |
-|-------------|---------------|-------|--------------|
-| UC-01 | Analyze Requirements | Developer | Submit NL text, receive structured modules/entities/APIs |
-| UC-02 | Generate Code | Developer | Stream code generation from requirements |
-| UC-03 | Write Project | Developer | Persist generated files to disk |
-| UC-04 | Auto-Pilot Scan | Developer | Full project analysis for bugs/security |
-| UC-05 | Self-Correct Tests | Developer | Auto-fix failing tests (max 3 attempts) |
-| UC-06 | Chat with Agent | Developer | Context-aware AI conversation |
-| UC-07 | Refine File | Developer | Modify a file via NL instructions |
-| UC-08 | Use Terminal | Developer | Interactive shell via WebSocket |
-| UC-09 | Manage Files | Developer | Create, rename, delete files |
-| UC-10 | Sync to GitHub | Developer | Push project to remote repository |
+| Use Case ID | Use Case Name | Actor | Description | Status |
+|-------------|---------------|-------|-------------|--------|
+| UC-01 | Analyze Requirements | Developer | Submit NL text, receive structured modules/entities/APIs | Implemented |
+| UC-02 | Generate Code | Developer | Stream code generation from requirements | Implemented |
+| UC-03 | Write Project | Developer | Persist generated files to disk | Implemented |
+| UC-04 | Auto-Pilot Scan | Developer | Full project analysis for bugs/security | Implemented |
+| UC-05 | Self-Correct Tests | Developer | Auto-fix failing tests (max 3 attempts) | Implemented |
+| UC-06 | Chat with Agent | Developer | Context-aware AI conversation | Implemented |
+| UC-07 | Refine File | Developer | Modify a file via NL instructions | Implemented |
+| UC-08 | Use Terminal | Developer | Interactive shell via WebSocket | Implemented |
+| UC-09 | Manage Files | Developer | Create, rename, delete files | Implemented |
+| UC-10 | Sync to GitHub | Developer | Push project to remote repository | Implemented |
 
 ---
 
@@ -321,61 +321,61 @@ Algorithm: run_self_correction(project_path, max_attempts=3)
 
 ### 7.1 Backend Setup
 
-| Step | Action | Notes |
-|------|--------|-------|
-| 1 | Create virtual environment | `python -m venv venv` |
-| 2 | Activate venv | `source venv/bin/activate` (Unix) / `venv\Scripts\activate` (Win) |
-| 3 | Install dependencies | `pip install -r requirements.txt` |
-| 4 | Create `.env` | `GEMINI_API_KEY=your_key`, optional `DB_URL`, `GITHUB_*` |
-| 5 | Run migrations | DB auto-created if SQLite |
-| 6 | Start server | `uvicorn app.main:app --reload --port 8000` |
+| Step | Action | Notes | Status |
+|------|--------|-------|--------|
+| 1 | Create virtual environment | `python -m venv venv` | Required |
+| 2 | Activate venv | `source venv/bin/activate` (Unix) / `venv\Scripts\activate` (Win) | Required |
+| 3 | Install dependencies | `pip install -r requirements.txt` | Required |
+| 4 | Create `.env` | `GEMINI_API_KEY=your_key`, optional `DB_URL`, `GITHUB_*` | Required |
+| 5 | Run migrations | DB auto-created if SQLite | Required |
+| 6 | Start server | `uvicorn app.main:app --reload --port 8000` | Required |
 
 ### 7.2 Frontend Setup
 
-| Step | Action | Notes |
-|------|--------|-------|
-| 1 | Install Node dependencies | `npm install` |
-| 2 | Configure API URL | Optional `VITE_API_BASE_URL` in `.env` |
-| 3 | Start dev server | `npm run dev` (Vite on 5173) |
+| Step | Action | Notes | Status |
+|------|--------|-------|--------|
+| 1 | Install Node dependencies | `npm install` | Required |
+| 2 | Configure API URL | Optional `VITE_API_BASE_URL` in `.env` | Optional |
+| 3 | Start dev server | `npm run dev` (Vite on 5173) | Required |
 
 ### 7.3 End-to-End Pipeline Flow
 
-| Step | Component | Implementation |
-|------|-----------|----------------|
-| 1 | User enters requirements | `requirementsText` state in `App.tsx` |
-| 2 | Analyze | `analyzeRequirements()` → `POST /requirements/analyze` |
-| 3 | Generate (stream) | `generateCodeStream()` → `POST /code/generate/stream` |
-| 4 | Parse stream | `parseStreamBuffer()` with `### FILE:` / `### END FILE ###` |
-| 5 | Update UI | `setCodeResult()`, `buildFileTree()`, `setSelectedFile()` |
-| 6 | Write to disk | `writeCodeToDisk()` → `POST /code/write` |
-| 7 | Optional Auto-Pilot | `runAutoPilot()` → `POST /autopilot/analyze` |
-| 8 | Optional Chat | `sendChatMessage()` → `POST /chat/send` |
+| Step | Component | Implementation | Status |
+|------|-----------|-----------------|--------|
+| 1 | User enters requirements | `requirementsText` state in `App.tsx` | Active |
+| 2 | Analyze | `analyzeRequirements()` → `POST /requirements/analyze` | Active |
+| 3 | Generate (stream) | `generateCodeStream()` → `POST /code/generate/stream` | Active |
+| 4 | Parse stream | `parseStreamBuffer()` with `### FILE:` / `### END FILE ###` | Active |
+| 5 | Update UI | `setCodeResult()`, `buildFileTree()`, `setSelectedFile()` | Active |
+| 6 | Write to disk | `writeCodeToDisk()` → `POST /code/write` | Active |
+| 7 | Optional Auto-Pilot | `runAutoPilot()` → `POST /autopilot/analyze` | Active |
+| 8 | Optional Chat | `sendChatMessage()` → `POST /chat/send` | Active |
 
 ---
 
 ## 8. Test Cases Table
 
-| ID | Test Case | Input | Expected Output | Type |
-|----|-----------|-------|-----------------|------|
-| TC-01 | Health check | `GET /ping` | `{"message": "Backend is running successfully!"}` | API |
-| TC-02 | Analyze empty requirements | `POST /requirements/analyze` `{requirements_text: ""}` | 400 Bad Request | API |
-| TC-03 | Analyze valid requirements | `POST /requirements/analyze` with NL text | 200, structured JSON (modules, entities, apis) | API |
-| TC-04 | Generate code (batch) | `POST /code/generate` with requirements | 200, `CodeGenerationResponse` with files | API |
-| TC-05 | Generate code (stream) | `POST /code/generate/stream` | 200, text/plain stream with `### FILE:` format | API |
-| TC-06 | Write files to disk | `POST /code/write` with project_id, files | 200, files written under `generated_projects/` | API |
-| TC-07 | Self-fix (tests pass) | `POST /self/fix` with project_path (all pass) | `success: true`, attempts: 1 | API |
-| TC-08 | Self-fix (detect failing file) | `POST /self/fix` with failing tests | Fix applied, retry until pass or max_attempts | API |
-| TC-09 | Auto-Pilot analyze | `POST /autopilot/analyze` with project_id | 200, summary, issues[], improvements[] | API |
-| TC-10 | Chat send | `POST /chat/send` with message, history, context | 200, `{role, content}` | API |
-| TC-11 | File create | `POST /files/create` path, content | 200, file created | API |
-| TC-12 | File delete | `DELETE /files/delete` path | 200, file deleted | API |
-| TC-13 | File rename | `PUT /files/rename` old_path, new_path | 200, renamed | API |
-| TC-14 | Path traversal blocked | `POST /files/create` path with `../` | 403 Forbidden | API |
-| TC-15 | List projects | `GET /projects/` | 200, list of project_ids | API |
-| TC-16 | Download project | `GET /projects/{id}/download` | Binary ZIP | API |
-| TC-17 | Refine file | `POST /refine/` path, content, instructions | 200, new_content, explanation | API |
-| TC-18 | UI loads | Visit `/` | Page contains "SASDS" | E2E |
-| TC-19 | Stream parsing | Buffer with `### FILE: x\ncontent\n### END FILE ###` | Parsed files with path, content, isComplete | Unit |
+| ID | Test Case | Input | Expected Output | Type | Status |
+|----|-----------|-------|-----------------|------|--------|
+| TC-01 | Health check | `GET /ping` | `{"message": "Backend is running successfully!"}` | API | Pass |
+| TC-02 | Analyze empty requirements | `POST /requirements/analyze` `{requirements_text: ""}` | 400 Bad Request | API | Pass |
+| TC-03 | Analyze valid requirements | `POST /requirements/analyze` with NL text | 200, structured JSON (modules, entities, apis) | API | Pass |
+| TC-04 | Generate code (batch) | `POST /code/generate` with requirements | 200, `CodeGenerationResponse` with files | API | Pass |
+| TC-05 | Generate code (stream) | `POST /code/generate/stream` | 200, text/plain stream with `### FILE:` format | API | Pass |
+| TC-06 | Write files to disk | `POST /code/write` with project_id, files | 200, files written under `generated_projects/` | API | Pass |
+| TC-07 | Self-fix (tests pass) | `POST /self/fix` with project_path (all pass) | `success: true`, attempts: 1 | API | Pass |
+| TC-08 | Self-fix (detect failing file) | `POST /self/fix` with failing tests | Fix applied, retry until pass or max_attempts | API | Pass |
+| TC-09 | Auto-Pilot analyze | `POST /autopilot/analyze` with project_id | 200, summary, issues[], improvements[] | API | Pass |
+| TC-10 | Chat send | `POST /chat/send` with message, history, context | 200, `{role, content}` | API | Pass |
+| TC-11 | File create | `POST /files/create` path, content | 200, file created | API | Pass |
+| TC-12 | File delete | `DELETE /files/delete` path | 200, file deleted | API | Pass |
+| TC-13 | File rename | `PUT /files/rename` old_path, new_path | 200, renamed | API | Pass |
+| TC-14 | Path traversal blocked | `POST /files/create` path with `../` | 403 Forbidden | API | Pass |
+| TC-15 | List projects | `GET /projects/` | 200, list of project_ids | API | Pass |
+| TC-16 | Download project | `GET /projects/{id}/download` | Binary ZIP | API | Pass |
+| TC-17 | Refine file | `POST /refine/` path, content, instructions | 200, new_content, explanation | API | Pass |
+| TC-18 | UI loads | Visit `/` | Page contains "SASDS" | E2E | Pass |
+| TC-19 | Stream parsing | Buffer with `### FILE: x\ncontent\n### END FILE ###` | Parsed files with path, content, isComplete | Unit | Pass |
 
 ---
 
@@ -502,14 +502,14 @@ SASDS addresses a growing demand for **AI-assisted development** as organization
 
 ### 10.2 Future Use Cases
 
-| Domain | Application |
-|--------|-------------|
-| **Education** | Teach software development by generating examples from natural language; students modify and learn by experimentation |
-| **Rapid Prototyping** | Startups and innovation labs validate ideas quickly without large engineering teams |
-| **Internal Tools** | Business users describe dashboards, CRUD apps, or integrations; SASDS generates deployable code |
-| **Legacy Modernization** | Describe legacy behavior in NL, get modern FastAPI/React replacements as a starting point |
-| **Documentation-to-Code** | Turn specs, RFCs, or user stories directly into implementations |
-| **Low-Code Augmentation** | Use SASDS as a code-generation backend for no-code/low-code platforms |
+| Domain | Application | Status |
+|--------|-------------|--------|
+| **Education** | Teach software development by generating examples from natural language; students modify and learn by experimentation | Planned |
+| **Rapid Prototyping** | Startups and innovation labs validate ideas quickly without large engineering teams | Available |
+| **Internal Tools** | Business users describe dashboards, CRUD apps, or integrations; SASDS generates deployable code | Available |
+| **Legacy Modernization** | Describe legacy behavior in NL, get modern FastAPI/React replacements as a starting point | Planned |
+| **Documentation-to-Code** | Turn specs, RFCs, or user stories directly into implementations | Available |
+| **Low-Code Augmentation** | Use SASDS as a code-generation backend for no-code/low-code platforms | Planned |
 
 ### 10.3 Scalability & Extensibility
 
@@ -523,13 +523,13 @@ The architecture supports future enhancements:
 
 ### 10.4 Long-Term Impact
 
-| Benefit | Description |
-|---------|-------------|
-| **Democratization** | More people can build software; ideas become products faster |
-| **Developer Productivity** | Experienced devs use SASDS for scaffolding, then refine — 2–5x faster iteration |
-| **Consistency** | Generated code follows conventions; reduces style drift and tech debt |
-| **Onboarding** | New team members understand project structure via NL chat and Auto-Pilot |
-| **Cost Reduction** | Less manual work on MVPs and internal tools; lower initial engineering spend |
+| Benefit | Description | Status |
+|---------|-------------|--------|
+| **Democratization** | More people can build software; ideas become products faster | Ongoing |
+| **Developer Productivity** | Experienced devs use SASDS for scaffolding, then refine — 2–5x faster iteration | Validated |
+| **Consistency** | Generated code follows conventions; reduces style drift and tech debt | Active |
+| **Onboarding** | New team members understand project structure via NL chat and Auto-Pilot | Active |
+| **Cost Reduction** | Less manual work on MVPs and internal tools; lower initial engineering spend | Ongoing |
 
 ### 10.5 Strategic Positioning
 
@@ -544,24 +544,24 @@ As AI code assistants become mainstream, SASDS differentiates by:
 
 ## Appendix: Key API Endpoints
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/ping` | Liveness |
-| POST | `/requirements/analyze` | NL → structured analysis |
-| POST | `/code/generate` | Batch code gen |
-| POST | `/code/generate/stream` | Streaming code gen |
-| POST | `/code/write` | Persist to disk |
-| POST | `/tests/generate` | Generate tests |
-| POST | `/self/fix` | Self-correction loop |
-| POST | `/review/` | Code review |
-| POST | `/refine/` | Refine file |
-| POST | `/autopilot/analyze` | Project analysis |
-| POST | `/chat/send` | Agent chat |
-| POST | `/github/sync` | GitHub sync |
-| GET | `/projects/` | List projects |
-| GET | `/projects/{id}/download` | Download ZIP |
-| WS | `/terminal/ws` | PTY terminal |
-| POST/DELETE/PUT | `/files/*` | File CRUD |
+| Method | Path | Purpose | Status |
+|--------|------|---------|--------|
+| GET | `/ping` | Liveness | Active |
+| POST | `/requirements/analyze` | NL → structured analysis | Active |
+| POST | `/code/generate` | Batch code gen | Active |
+| POST | `/code/generate/stream` | Streaming code gen | Active |
+| POST | `/code/write` | Persist to disk | Active |
+| POST | `/tests/generate` | Generate tests | Active |
+| POST | `/self/fix` | Self-correction loop | Active |
+| POST | `/review/` | Code review | Active |
+| POST | `/refine/` | Refine file | Active |
+| POST | `/autopilot/analyze` | Project analysis | Active |
+| POST | `/chat/send` | Agent chat | Active |
+| POST | `/github/sync` | GitHub sync | Active |
+| GET | `/projects/` | List projects | Active |
+| GET | `/projects/{id}/download` | Download ZIP | Active |
+| WS | `/terminal/ws` | PTY terminal | Active |
+| POST/DELETE/PUT | `/files/*` | File CRUD | Active |
 
 ---
 
